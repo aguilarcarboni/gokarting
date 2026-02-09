@@ -10,9 +10,15 @@ import SwiftData
 
 @main
 struct gokartingApp: App {
+    init() {
+        // Initialize connectivity
+        _ = ConnectivityManager.shared
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Session.self,
+            Lap.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,7 +31,11 @@ struct gokartingApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if os(watchOS)
+            WatchTimerView()
+            #else
             ContentView()
+            #endif
         }
         .modelContainer(sharedModelContainer)
     }

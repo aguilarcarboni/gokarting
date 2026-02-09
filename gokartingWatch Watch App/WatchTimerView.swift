@@ -11,6 +11,7 @@ struct WatchTimerView: View {
     // State for finish confirmation
     @State private var isLongPressing = false
     @State private var showSummary = false
+    @State private var lastSavedSession: Session?
     
     var body: some View {
         NavigationStack {
@@ -71,7 +72,11 @@ struct WatchTimerView: View {
                 }
             }
             .navigationDestination(isPresented: $showSummary) {
-                Text("Session Saved") // Placeholder for Summary View
+                if let session = lastSavedSession {
+                    SessionDetailView(session: session)
+                } else {
+                    Text("Session Saved")
+                }
             }
         }
     }
@@ -91,7 +96,7 @@ struct WatchTimerView: View {
         playHaptic(.stop)
         
         // Save to SwiftData (Syncs via CloudKit automatically)
-        timerManager.saveSession(context: modelContext)
+        lastSavedSession = timerManager.saveSession(context: modelContext)
         
         timerManager.reset()
         showSummary = true
