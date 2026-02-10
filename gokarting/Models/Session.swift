@@ -6,14 +6,16 @@ final class Session {
     var id: UUID
     var date: Date
     var note: String?
+    var track: Track?
     
     @Relationship(deleteRule: .cascade, inverse: \Lap.session)
     var laps: [Lap] = []
     
-    init(date: Date = Date(), note: String? = nil) {
+    init(date: Date = Date(), note: String? = nil, track: Track? = nil) {
         self.id = UUID()
         self.date = date
         self.note = note
+        self.track = track
     }
     
     // Computed properties for stats
