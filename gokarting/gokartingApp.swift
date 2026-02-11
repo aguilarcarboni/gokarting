@@ -10,20 +10,19 @@ import SwiftData
 
 @main
 struct gokartingApp: App {
-    init() {
-        // Initialize connectivity
-        _ = ConnectivityManager.shared
-    }
-
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Session.self,
             Lap.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            Task { @MainActor in
+                DataSeeder.seed(context: container.mainContext)
+            }
+            return container
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

@@ -34,4 +34,21 @@ final class Session {
         let sumOfSquaredDiffs = laps.reduce(0) { $0 + pow($1.duration - avg, 2) }
         return sqrt(sumOfSquaredDiffs / Double(laps.count))
     }
+    
+    var averageLapClean: TimeInterval? {
+        let durations = laps.map { $0.duration }.sorted()
+        guard durations.count >= 5 else { return averageLap }
+        
+        let q1 = durations[Int(Double(durations.count) * 0.25)]
+        let q3 = durations[Int(Double(durations.count) * 0.75)]
+        let iqr = q3 - q1
+        
+        let upperBound = q3 + (1.5 * iqr)
+        let lowerBound = q1 - (1.5 * iqr)
+        
+        let cleanLaps = durations.filter { $0 >= lowerBound && $0 <= upperBound }
+        
+        guard !cleanLaps.isEmpty else { return averageLap }
+        return cleanLaps.reduce(0, +) / Double(cleanLaps.count)
+    }
 }
