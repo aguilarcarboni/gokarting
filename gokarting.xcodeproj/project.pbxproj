@@ -30,9 +30,9 @@
 			path = gokarting;
 			sourceTree = "<group>";
 		};
-		91CD085A2F3974300080A277 /* gokartingWatch Watch App */ = {
+		91CD085A2F3974300080A277 /* gokartingWatch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "gokartingWatch Watch App";
+			path = gokartingWatch;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -59,7 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				91CD08132F396DEA0080A277 /* gokarting */,
-				91CD085A2F3974300080A277 /* gokartingWatch Watch App */,
+				91CD085A2F3974300080A277 /* gokartingWatch */,
 				91CD08122F396DEA0080A277 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -111,7 +111,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				91CD085A2F3974300080A277 /* gokartingWatch Watch App */,
+				91CD085A2F3974300080A277 /* gokartingWatch */,
 			);
 			name = "gokartingWatch Watch App";
 			packageProductDependencies = (
@@ -410,7 +410,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "gokartingWatch Watch App/gokartingWatch Watch App.entitlements";
+				CODE_SIGN_ENTITLEMENTS = gokartingWatch/gokartingWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NX5G6T2MMG;
@@ -418,7 +418,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = gokartingWatch;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aguilarcarboni.gokarting;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -444,7 +444,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "gokartingWatch Watch App/gokartingWatch Watch App.entitlements";
+				CODE_SIGN_ENTITLEMENTS = gokartingWatch/gokartingWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NX5G6T2MMG;
@@ -452,7 +452,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = gokartingWatch;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aguilarcarboni.gokarting;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

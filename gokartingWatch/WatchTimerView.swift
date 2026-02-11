@@ -71,13 +71,6 @@ struct WatchTimerView: View {
                         .padding(.bottom, 20)
                 }
             }
-            .navigationDestination(isPresented: $showSummary) {
-                if let session = lastSavedSession {
-                    SessionDetailView(session: session)
-                } else {
-                    Text("Session Saved")
-                }
-            }
         }
     }
     
@@ -95,7 +88,6 @@ struct WatchTimerView: View {
         timerManager.stop()
         playHaptic(.stop)
         
-        // Save to SwiftData (Syncs via CloudKit automatically)
         lastSavedSession = timerManager.saveSession(context: modelContext)
         
         timerManager.reset()

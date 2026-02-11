@@ -4,8 +4,19 @@ import SwiftData
 class DataSeeder {
     @MainActor
     static func seed(context: ModelContext) {
+        seedFIK(context: context)
+        seedFormulaKart(context: context)
+        seedP1Speedway(context: context)
+    }
+    
+    // MARK: - FIK Sessions
+    
+    @MainActor
+    private static func seedFIK(context: ModelContext) {
         let calendar = Calendar.current
         var dateComponents = DateComponents()
+        
+        // MARK: Nov 22, 2025 Data
         dateComponents.year = 2025
         dateComponents.month = 11
         dateComponents.day = 22
@@ -77,25 +88,7 @@ class DataSeeder {
         addLaps(laps5, to: session5)
         context.insert(session5)
 
-        // MARK: - Nov 30, 2025 Data
-        dateComponents.year = 2025
-        dateComponents.month = 11
-        dateComponents.day = 30
-        
-        // Heat 1
-        dateComponents.hour = 13
-        dateComponents.minute = 10
-        let dateNov30 = calendar.date(from: dateComponents) ?? Date()
-        let sessionNov30 = Session(date: dateNov30, note: "Heat 1", track: .formulaKart)
-        let lapsNov30 = [
-            31.723, 29.031, 27.943, 26.875, 26.901,
-            28.450, 26.180, 25.332, 26.091, 26.790,
-            25.914, 27.802, 26.760
-        ]
-        addLaps(lapsNov30, to: sessionNov30)
-        context.insert(sessionNov30)
-
-        // MARK: - Dec 15, 2025 Data
+        // MARK: Dec 15, 2025 Data
         dateComponents.year = 2025
         dateComponents.month = 12
         dateComponents.day = 15
@@ -129,7 +122,7 @@ class DataSeeder {
         addLaps(lapsDec2, to: sessionDec2)
         context.insert(sessionDec2)
 
-        // MARK: - January 29, 2026 Data
+        // MARK: January 2, 2026 Data
         dateComponents.year = 2026
         dateComponents.month = 1
         dateComponents.day = 2
@@ -164,8 +157,34 @@ class DataSeeder {
         ]
         addLaps(lapsJan2, to: sessionJan2)
         context.insert(sessionJan2)
+    }
+    
+    // MARK: - Formula Kart Sessions
+    
+    @MainActor
+    private static func seedFormulaKart(context: ModelContext) {
+        let calendar = Calendar.current
+        var dateComponents = DateComponents()
+        
+        // MARK: Nov 30, 2025 Data
+        dateComponents.year = 2025
+        dateComponents.month = 11
+        dateComponents.day = 30
+        
+        // Heat 1
+        dateComponents.hour = 13
+        dateComponents.minute = 10
+        let dateNov30 = calendar.date(from: dateComponents) ?? Date()
+        let sessionNov30 = Session(date: dateNov30, note: "Heat 1", track: .formulaKart)
+        let lapsNov30 = [
+            31.723, 29.031, 27.943, 26.875, 26.901,
+            28.450, 26.180, 25.332, 26.091, 26.790,
+            25.914, 27.802, 26.760
+        ]
+        addLaps(lapsNov30, to: sessionNov30)
+        context.insert(sessionNov30)
 
-        // MARK: - January 19, 2026 Data
+        // MARK: January 19, 2026 Data
         dateComponents.year = 2026
         dateComponents.month = 1
         dateComponents.day = 19
@@ -238,7 +257,7 @@ class DataSeeder {
         addLaps(lapsJan19_5, to: sessionJan19_5)
         context.insert(sessionJan19_5)
 
-        // MARK: - January 27, 2026 Data
+        // MARK: January 27, 2026 Data
         dateComponents.year = 2026
         dateComponents.month = 1
         dateComponents.day = 27
@@ -299,7 +318,7 @@ class DataSeeder {
         addLaps(lapsJan27_4, to: sessionJan27_4)
         context.insert(sessionJan27_4)
 
-        // MARK: - February 4, 2026 Data
+        // MARK: February 4, 2026 Data
         dateComponents.year = 2026
         dateComponents.month = 2
         dateComponents.day = 4
@@ -331,6 +350,42 @@ class DataSeeder {
         ]
         addLaps(lapsFeb4_2, to: sessionFeb4_2)
         context.insert(sessionFeb4_2)
+    }
+    
+    // MARK: - P1 Speedway Sessions
+    
+    @MainActor
+    private static func seedP1Speedway(context: ModelContext) {
+        let calendar = Calendar.current
+        var dateComponents = DateComponents()
+        
+        // MARK: February 8, 2026 Data
+        dateComponents.year = 2026
+        dateComponents.month = 2
+        dateComponents.day = 8
+        
+        // Heat 1
+        dateComponents.hour = 11
+        dateComponents.minute = 00
+        let dateFeb8_1 = calendar.date(from: dateComponents) ?? Date()
+        let sessionFeb8_1 = Session(date: dateFeb8_1, note: "Heat 1", track: .p1Speedway)
+        let lapsFeb8_1 = [
+            76.72, 75.35, 80.07, 74.79, 75.61
+        ]
+        addLaps(lapsFeb8_1, to: sessionFeb8_1)
+        context.insert(sessionFeb8_1)
+
+        // Heat 2
+        dateComponents.hour = 11
+        dateComponents.minute = 30
+        let dateFeb8_2 = calendar.date(from: dateComponents) ?? Date()
+        let sessionFeb8_2 = Session(date: dateFeb8_2, note: "Heat 2", track: .p1Speedway)
+        let lapsFeb8_2 = [
+            75.21, 74.49, 73.73, 73.10, 74.35,
+            73.27, 74.18, 73.19, 73.63, 73.49
+        ]
+        addLaps(lapsFeb8_2, to: sessionFeb8_2)
+        context.insert(sessionFeb8_2)
     }
     
     private static func addLaps(_ durations: [Double], to session: Session) {
