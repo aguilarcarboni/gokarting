@@ -8,7 +8,7 @@ struct ProgressionView: View {
 
     private var filteredSessions: [Session] {
         allSessions
-            .filter { $0.track == selectedTrack && !$0.laps.isEmpty }
+            .filter { $0.track == selectedTrack && !$0.safeLaps.isEmpty }
             .sorted { $0.date < $1.date }
     }
 

@@ -15,12 +15,22 @@ struct gokartingWatch_Watch_AppApp: App {
             Session.self,
             Lap.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
+        // Try loading the persistent store; if schema changed during development,
+        // delete the old store and recreate it.
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            print("⚠️ Failed to load store (\(error)), resetting local database.")
+            let storeURL = URL.applicationSupportDirectory.appending(path: "default.store")
+            try? FileManager.default.removeItem(at: storeURL)
+            do {
+                let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+                return try ModelContainer(for: schema, configurations: [config])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
     }()
 

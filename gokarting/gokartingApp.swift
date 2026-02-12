@@ -15,17 +15,37 @@ struct gokartingApp: App {
             Session.self,
             Lap.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
 
+        let container: ModelContainer
+
+        // Try with iCloud sync first, fall back to local-only storage
         do {
-            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            Task { @MainActor in
-                DataSeeder.seed(context: container.mainContext)
-            }
-            return container
+            let cloudConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
+            )
+            container = try ModelContainer(for: schema, configurations: [cloudConfig])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            print("⚠️ iCloud sync unavailable (\(error)), using local storage.")
+            // Delete any tainted store left by the failed CloudKit attempt
+            let storeURL = URL.applicationSupportDirectory.appending(path: "default.store")
+            try? FileManager.default.removeItem(at: storeURL)
+            do {
+                let localConfig = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false
+                )
+                container = try ModelContainer(for: schema, configurations: [localConfig])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
+
+        Task { @MainActor in
+            DataSeeder.seed(context: container.mainContext)
+        }
+        return container
     }()
 
     var body: some Scene {

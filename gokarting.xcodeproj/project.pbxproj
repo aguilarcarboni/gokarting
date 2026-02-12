@@ -7,8 +7,9 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		9124DDD72F3D64000098B00E /* gokartingWatch-Watch-App-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "gokartingWatch-Watch-App-Info.plist"; sourceTree = "<group>"; };
 		91CD08112F396DEA0080A277 /* gokarting.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gokarting.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		91CD08592F3974300080A277 /* gokartingWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "gokartingWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		91CD08592F3974300080A277 /* gokartingWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gokartingWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -58,6 +59,7 @@
 		91CD08082F396DEA0080A277 = {
 			isa = PBXGroup;
 			children = (
+				9124DDD72F3D64000098B00E /* gokartingWatch-Watch-App-Info.plist */,
 				91CD08132F396DEA0080A277 /* gokarting */,
 				91CD085A2F3974300080A277 /* gokartingWatch */,
 				91CD08122F396DEA0080A277 /* Products */,
@@ -68,7 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				91CD08112F396DEA0080A277 /* gokarting.app */,
-				91CD08592F3974300080A277 /* gokartingWatch Watch App.app */,
+				91CD08592F3974300080A277 /* gokartingWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -98,9 +100,9 @@
 			productReference = 91CD08112F396DEA0080A277 /* gokarting.app */;
 			productType = "com.apple.product-type.application";
 		};
-		91CD08582F3974300080A277 /* gokartingWatch Watch App */ = {
+		91CD08582F3974300080A277 /* gokartingWatch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 91CD08612F3974310080A277 /* Build configuration list for PBXNativeTarget "gokartingWatch Watch App" */;
+			buildConfigurationList = 91CD08612F3974310080A277 /* Build configuration list for PBXNativeTarget "gokartingWatch" */;
 			buildPhases = (
 				91CD08552F3974300080A277 /* Sources */,
 				91CD08562F3974300080A277 /* Frameworks */,
@@ -113,11 +115,11 @@
 			fileSystemSynchronizedGroups = (
 				91CD085A2F3974300080A277 /* gokartingWatch */,
 			);
-			name = "gokartingWatch Watch App";
+			name = gokartingWatch;
 			packageProductDependencies = (
 			);
 			productName = "gokartingWatch Watch App";
-			productReference = 91CD08592F3974300080A277 /* gokartingWatch Watch App.app */;
+			productReference = 91CD08592F3974300080A277 /* gokartingWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -153,7 +155,7 @@
 			projectRoot = "";
 			targets = (
 				91CD08102F396DEA0080A277 /* gokarting */,
-				91CD08582F3974300080A277 /* gokartingWatch Watch App */,
+				91CD08582F3974300080A277 /* gokartingWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -416,7 +418,10 @@
 				DEVELOPMENT_TEAM = NX5G6T2MMG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "gokartingWatch-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = gokartingWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "The app needs to read HealthKit records to save a Racing session";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "The app needs to update HealthKit records to save a Racing session";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aguilarcarboni.gokarting;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -450,7 +455,10 @@
 				DEVELOPMENT_TEAM = NX5G6T2MMG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "gokartingWatch-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = gokartingWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "The app needs to read HealthKit records to save a Racing session";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "The app needs to update HealthKit records to save a Racing session";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.aguilarcarboni.gokarting;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -495,7 +503,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		91CD08612F3974310080A277 /* Build configuration list for PBXNativeTarget "gokartingWatch Watch App" */ = {
+		91CD08612F3974310080A277 /* Build configuration list for PBXNativeTarget "gokartingWatch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				91CD08622F3974310080A277 /* Debug */,

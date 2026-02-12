@@ -51,8 +51,8 @@ struct SessionRow: View {
                 if let best = session.bestLap {
                     Label(String(format: "Best: %.2fs", best), systemImage: "stopwatch")
                 }
-                if session.laps.count > 0 {
-                    Text("• \(session.laps.count) Laps")
+                if session.safeLaps.count > 0 {
+                    Text("• \(session.safeLaps.count) Laps")
                 }
             }
             .font(.caption)
@@ -67,7 +67,7 @@ struct SessionDetailView: View {
     var body: some View {
         List {
             Section {
-                Chart(session.laps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
+                Chart(session.safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
                     LineMark(
                         x: .value("Lap", lap.lapNumber),
                         y: .value("Time", lap.duration)
@@ -93,7 +93,7 @@ struct SessionDetailView: View {
             }
             
             Section("Laps") {
-                ForEach(session.laps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
+                ForEach(session.safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
                     HStack {
                         Text("\(lap.lapNumber)")
                             .monospacedDigit()
