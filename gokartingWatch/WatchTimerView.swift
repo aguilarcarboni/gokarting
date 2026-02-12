@@ -9,6 +9,7 @@ struct WatchTimerView: View {
     @State private var timerManager = TimerManager()
     @Environment(\.modelContext) private var modelContext
     @Environment(\.isLuminanceReduced) var isLuminanceReduced
+    @StateObject private var syncMonitor = CloudSyncMonitor()
 
     // Workout session keeps the app foregrounded + Always-On Display active
     #if os(watchOS)
@@ -32,7 +33,7 @@ struct WatchTimerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     if timerManager.isRunning {
                         timerDisplay
                     } else {
@@ -105,18 +106,20 @@ struct WatchTimerView: View {
 
         // Current lap elapsed time
         Text(timerManager.formatTime(timerManager.elapsedTime))
-            .font(.system(size: dimmed ? 36 : 44, weight: .bold, design: .monospaced))
+            .font(.system(size: dimmed ? 28 : 34, weight: .bold, design: .monospaced))
             .foregroundStyle(dimmed ? .white.opacity(0.6) : .white)
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
 
         // Lap counter
         Text("LAP \(timerManager.laps.count + 1)")
-            .font(.headline)
+            .font(.subheadline)
             .foregroundStyle(.yellow)
 
         // Previous lap (hidden when dimmed to save power)
         if !dimmed, let last = timerManager.laps.last {
             Text("PREV: \(timerManager.formatTime(last))")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
 
@@ -128,7 +131,7 @@ struct WatchTimerView: View {
             }
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
     }
 
@@ -139,6 +142,7 @@ struct WatchTimerView: View {
             Text("TAP TO START")
                 .font(.headline)
                 .fontWeight(.heavy)
+            WatchSyncDot(state: syncMonitor.syncState)
         }
     }
 
@@ -180,6 +184,14 @@ struct WatchTimerView: View {
         playHaptic(.stop)
 
         lastSavedSession = timerManager.saveSession(context: modelContext)
+
+        // Explicitly save so the session is persisted and synced to iCloud immediately
+        do {
+            try modelContext.save()
+        } catch {
+            print("⚠️ Failed to save session to store: \(error)")
+        }
+
         timerManager.reset()
         showSummary = true
 
@@ -194,6 +206,39 @@ struct WatchTimerView: View {
         #if os(watchOS)
         WKInterfaceDevice.current().play(type)
         #endif
+    }
+}
+
+struct WatchSyncDot: View {
+    let state: SyncState
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var dotColor: Color {
+        switch state {
+        case .synced:       return .green
+        case .syncing:      return .orange
+        case .error:        return .red
+        case .notAvailable: return .gray
+        }
+    }
+
+    private var label: String {
+        switch state {
+        case .synced:       return "iCloud"
+        case .syncing:      return "Syncing"
+        case .error:        return "Sync Error"
+        case .notAvailable: return "Offline"
+        }
     }
 }
 

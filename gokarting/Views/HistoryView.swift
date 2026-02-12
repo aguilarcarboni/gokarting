@@ -5,6 +5,7 @@ import Charts
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
+    @StateObject private var syncMonitor = CloudSyncMonitor()
     
     var body: some View {
         NavigationSplitView {
@@ -19,6 +20,11 @@ struct HistoryView: View {
                 .onDelete(perform: deleteItems)
             }
             .navigationTitle("History")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    SyncStatusDot(state: syncMonitor.syncState)
+                }
+            }
         } detail: {
             Text("Select a session")
         }
@@ -117,6 +123,49 @@ struct SessionDetailView: View {
     func format(_ value: TimeInterval?) -> String {
         guard let value = value else { return "--" }
         return String(format: "%.3f s", value)
+    }
+}
+
+struct SyncStatusDot: View {
+    let state: SyncState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 8, height: 8)
+                .overlay {
+                    if state == .syncing {
+                        Circle()
+                            .stroke(dotColor.opacity(0.4), lineWidth: 2)
+                            .scaleEffect(1.8)
+                            .opacity(0)
+                            .animation(
+                                .easeOut(duration: 1.2)
+                                    .repeatForever(autoreverses: false),
+                                value: state
+                            )
+                    }
+                }
+        }
+    }
+
+    private var dotColor: Color {
+        switch state {
+        case .synced:       return .green
+        case .syncing:      return .orange
+        case .error:        return .red
+        case .notAvailable: return .gray
+        }
+    }
+
+    private var label: String {
+        switch state {
+        case .synced:       return "iCloud"
+        case .syncing:      return "Syncing"
+        case .error:        return "Sync Error"
+        case .notAvailable: return "Offline"
+        }
     }
 }
 

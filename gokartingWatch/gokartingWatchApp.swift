@@ -16,22 +16,32 @@ struct gokartingWatch_Watch_AppApp: App {
             Lap.self,
         ])
 
-        // Try loading the persistent store; if schema changed during development,
-        // delete the old store and recreate it.
+        let container: ModelContainer
+
+        // Try with iCloud sync first, fall back to local-only storage
         do {
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            return try ModelContainer(for: schema, configurations: [config])
+            let cloudConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
+            )
+            container = try ModelContainer(for: schema, configurations: [cloudConfig])
         } catch {
-            print("⚠️ Failed to load store (\(error)), resetting local database.")
+            print("⚠️ iCloud sync unavailable (\(error)), using local storage.")
             let storeURL = URL.applicationSupportDirectory.appending(path: "default.store")
             try? FileManager.default.removeItem(at: storeURL)
             do {
-                let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-                return try ModelContainer(for: schema, configurations: [config])
+                let localConfig = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false
+                )
+                container = try ModelContainer(for: schema, configurations: [localConfig])
             } catch {
                 fatalError("Could not create ModelContainer: \(error)")
             }
         }
+
+        return container
     }()
 
     var body: some Scene {
