@@ -4,11 +4,11 @@ import Charts
 
 struct ProgressionView: View {
     @Query(sort: \Session.date) private var allSessions: [Session]
-    @State private var selectedTrack: Track = Track.allCases.first!
+    @State private var selectedCombo: TrackKartCombo = TrackKartCombo.allCases.first!
 
     private var filteredSessions: [Session] {
         allSessions
-            .filter { $0.track == selectedTrack && !$0.safeLaps.isEmpty }
+            .filter { $0.trackKartCombo == selectedCombo && !$0.safeLaps.isEmpty }
             .sorted { $0.date < $1.date }
     }
 
@@ -37,9 +37,9 @@ struct ProgressionView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Track", selection: $selectedTrack) {
-                        ForEach(Track.allCases, id: \.self) { track in
-                            Text(track.rawValue).tag(track)
+                    Picker("Combo", selection: $selectedCombo) {
+                        ForEach(TrackKartCombo.allCases) { combo in
+                            Text(combo.displayName).tag(combo)
                         }
                     }
                     .pickerStyle(.menu)
@@ -49,7 +49,7 @@ struct ProgressionView: View {
                     ContentUnavailableView(
                         "No Sessions",
                         systemImage: "chart.line.downtrend.xyaxis",
-                        description: Text("Record some sessions at \(selectedTrack.rawValue) to see your progression.")
+                        description: Text("Record some sessions with \(selectedCombo.displayName) to see your progression.")
                     )
                     .listRowBackground(Color.clear)
                 } else {

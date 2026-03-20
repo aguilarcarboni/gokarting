@@ -7,22 +7,47 @@ final class Session {
     var date: Date = Date()
     var note: String? = nil
     var track: Track? = nil
+    var kart: Kart? = nil
     var seedIdentifier: String? = nil
     
     @Relationship(deleteRule: .cascade, inverse: \Lap.session)
     var laps: [Lap]? = nil
     
-    init(date: Date = Date(), note: String? = nil, track: Track? = nil, seedIdentifier: String? = nil) {
+    init(
+        date: Date = Date(),
+        note: String? = nil,
+        track: Track? = nil,
+        kart: Kart? = nil,
+        seedIdentifier: String? = nil
+    ) {
         self.id = UUID()
         self.date = date
         self.note = note
         self.track = track
+        self.kart = kart
         self.seedIdentifier = seedIdentifier
     }
     
     /// Convenience accessor that unwraps the optional relationship.
     var safeLaps: [Lap] {
         laps ?? []
+    }
+
+    var effectiveKart: Kart? {
+        if let kart {
+            return kart
+        }
+        guard let track else {
+            return nil
+        }
+        return track.defaultKart
+    }
+
+    var trackKartCombo: TrackKartCombo? {
+        guard let track, let kart = effectiveKart else {
+            return nil
+        }
+        return TrackKartCombo(track: track, kart: kart)
     }
     
     // Computed properties for stats

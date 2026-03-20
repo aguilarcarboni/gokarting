@@ -103,10 +103,14 @@ class TimerManager {
     
     // Save to SwiftData
     @discardableResult
-    func saveSession(context: ModelContext) -> Session? {
+    func saveSession(context: ModelContext, track: Track, kart: Kart) -> Session? {
         guard !laps.isEmpty else { return nil }
         
-        let session = Session(date: startDate ?? Date())
+        let session = Session(
+            date: startDate ?? Date(),
+            track: track,
+            kart: kart
+        )
         for (index, duration) in laps.enumerated() {
             let lap = Lap(lapNumber: index + 1, duration: duration)
             lap.session = session // Relationship handles the append

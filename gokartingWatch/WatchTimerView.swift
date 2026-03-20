@@ -10,6 +10,8 @@ struct WatchTimerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.isLuminanceReduced) var isLuminanceReduced
     @StateObject private var syncMonitor = CloudSyncMonitor()
+    @State private var selectedTrack: Track = .fik
+    @State private var selectedKart: Kart = .fikKart
 
     // Workout session keeps the app foregrounded + Always-On Display active
     #if os(watchOS)
@@ -142,6 +144,27 @@ struct WatchTimerView: View {
             Text("TAP TO START")
                 .font(.headline)
                 .fontWeight(.heavy)
+            VStack(spacing: 8) {
+                Picker("Track", selection: $selectedTrack) {
+                    ForEach(Track.allCases, id: \.self) { track in
+                        Text(track.rawValue).tag(track)
+                    }
+                }
+                .labelsHidden()
+
+                Picker("Kart", selection: $selectedKart) {
+                    ForEach(selectedTrack.availableKarts, id: \.self) { kart in
+                        Text(kart.rawValue).tag(kart)
+                    }
+                }
+                .labelsHidden()
+            }
+            .onChange(of: selectedTrack) { _, newTrack in
+                let availableKarts = newTrack.availableKarts
+                if !availableKarts.contains(selectedKart) {
+                    selectedKart = newTrack.defaultKart
+                }
+            }
             WatchSyncDot(state: syncMonitor.syncState)
         }
     }
@@ -183,7 +206,11 @@ struct WatchTimerView: View {
         timerManager.stop()
         playHaptic(.stop)
 
-        lastSavedSession = timerManager.saveSession(context: modelContext)
+        lastSavedSession = timerManager.saveSession(
+            context: modelContext,
+            track: selectedTrack,
+            kart: selectedKart
+        )
 
         // Explicitly save so the session is persisted and synced to iCloud immediately
         do {

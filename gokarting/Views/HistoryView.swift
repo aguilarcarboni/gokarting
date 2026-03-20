@@ -6,11 +6,12 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
     @StateObject private var syncMonitor = CloudSyncMonitor()
+    @State private var selectedCombo: TrackKartCombo? = nil
     
     var body: some View {
         NavigationSplitView {
             List {
-                ForEach(sessions) { session in
+                ForEach(filteredSessions) { session in
                     NavigationLink {
                         SessionDetailView(session: session)
                     } label: {
@@ -24,16 +25,31 @@ struct HistoryView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     SyncStatusDot(state: syncMonitor.syncState)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Picker("Combo", selection: $selectedCombo) {
+                        Text("All Combos").tag(Optional<TrackKartCombo>.none)
+                        ForEach(TrackKartCombo.allCases) { combo in
+                            Text(combo.displayName).tag(Optional(combo))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
             }
         } detail: {
             Text("Select a session")
         }
     }
     
+    private var filteredSessions: [Session] {
+        guard let selectedCombo else { return sessions }
+        return sessions.filter { $0.trackKartCombo == selectedCombo }
+    }
+    
     private func deleteItems(offsets: IndexSet) {
+        let source = filteredSessions
         withAnimation {
             for index in offsets {
-                modelContext.delete(sessions[index])
+                modelContext.delete(source[index])
             }
         }
     }
@@ -47,7 +63,11 @@ struct SessionRow: View {
             Text(session.date.formatted(date: .abbreviated, time: .shortened))
                 .font(.headline)
             
-            if let track = session.track {
+            if let combo = session.trackKartCombo {
+                Text(combo.displayName)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+            } else if let track = session.track {
                 Text(track.rawValue)
                     .font(.subheadline)
                     .foregroundStyle(.primary)
@@ -92,6 +112,11 @@ struct SessionDetailView: View {
             }
             
             Section("Stats") {
+                if let combo = session.trackKartCombo {
+                    LabeledContent("Setup", value: combo.displayName)
+                } else if let track = session.track {
+                    LabeledContent("Track", value: track.rawValue)
+                }
                 LabeledContent("Best Lap", value: format(session.bestLap))
                 LabeledContent("Avg Lap", value: format(session.averageLap))
                 LabeledContent("Avg Lap (No Outliers)", value: format(session.averageLapClean))
