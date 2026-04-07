@@ -83,4 +83,57 @@ final class Session {
         guard !cleanLaps.isEmpty else { return averageLap }
         return cleanLaps.reduce(0, +) / Double(cleanLaps.count)
     }
+
+    var medianLap: TimeInterval? {
+        let durations = safeLaps.map(\.duration).sorted()
+        guard !durations.isEmpty else { return nil }
+
+        let middle = durations.count / 2
+        if durations.count.isMultiple(of: 2) {
+            return (durations[middle - 1] + durations[middle]) / 2
+        } else {
+            return durations[middle]
+        }
+    }
+
+    /// Average of the first `count` laps, used as opening race pace.
+    func firstLapsAverage(count: Int = 5) -> TimeInterval? {
+        let durations = safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber }).map(\.duration)
+        guard !durations.isEmpty else { return nil }
+        let sampleCount = min(count, durations.count)
+        let slice = durations.prefix(sampleCount)
+        return slice.reduce(0, +) / Double(sampleCount)
+    }
+
+    /// Average of the last `count` laps, used as closing race pace.
+    func lastLapsAverage(count: Int = 5) -> TimeInterval? {
+        let durations = safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber }).map(\.duration)
+        guard !durations.isEmpty else { return nil }
+        let sampleCount = min(count, durations.count)
+        let slice = durations.suffix(sampleCount)
+        return slice.reduce(0, +) / Double(sampleCount)
+    }
+
+    /// Positive value means pace dropped (slower at the end), negative means improved.
+    var paceDeltaLastVsFirstFive: TimeInterval? {
+        guard let first = firstLapsAverage(count: 5),
+              let last = lastLapsAverage(count: 5) else { return nil }
+        return last - first
+    }
+
+    /// Percent of laps that are retained by the current IQR clean-lap logic.
+    var cleanLapRatio: Double? {
+        let durations = safeLaps.map(\.duration).sorted()
+        guard !durations.isEmpty else { return nil }
+        guard durations.count >= 5 else { return 1.0 }
+
+        let q1 = durations[Int(Double(durations.count) * 0.25)]
+        let q3 = durations[Int(Double(durations.count) * 0.75)]
+        let iqr = q3 - q1
+        let upperBound = q3 + (1.5 * iqr)
+        let lowerBound = q1 - (1.5 * iqr)
+
+        let cleanCount = durations.filter { $0 >= lowerBound && $0 <= upperBound }.count
+        return Double(cleanCount) / Double(durations.count)
+    }
 }

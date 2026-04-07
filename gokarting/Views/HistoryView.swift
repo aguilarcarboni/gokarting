@@ -7,6 +7,7 @@ struct HistoryView: View {
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
     @StateObject private var syncMonitor = CloudSyncMonitor()
     @State private var selectedCombo: TrackKartCombo? = nil
+    @State private var selectedRange: HistoryRange = .all
     
     var body: some View {
         NavigationSplitView {
@@ -34,6 +35,14 @@ struct HistoryView: View {
                     }
                     .pickerStyle(.menu)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Picker("Range", selection: $selectedRange) {
+                        ForEach(HistoryRange.allCases) { range in
+                            Text(range.label).tag(range)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
             }
         } detail: {
             Text("Select a session")
@@ -41,8 +50,11 @@ struct HistoryView: View {
     }
     
     private var filteredSessions: [Session] {
-        guard let selectedCombo else { return sessions }
-        return sessions.filter { $0.trackKartCombo == selectedCombo }
+        sessions.filter { session in
+            let comboMatches = selectedCombo == nil || session.trackKartCombo == selectedCombo
+            let rangeMatches = selectedRange.contains(session.date)
+            return comboMatches && rangeMatches
+        }
     }
     
     private func deleteItems(offsets: IndexSet) {
@@ -51,6 +63,44 @@ struct HistoryView: View {
             for index in offsets {
                 modelContext.delete(source[index])
             }
+        }
+    }
+}
+
+private enum HistoryRange: String, CaseIterable, Identifiable {
+    case all
+    case last30Days
+    case last90Days
+    case thisYear
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: return "All Time"
+        case .last30Days: return "Last 30 Days"
+        case .last90Days: return "Last 90 Days"
+        case .thisYear: return "This Year"
+        }
+    }
+
+    func contains(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch self {
+        case .all:
+            return true
+        case .last30Days:
+            guard let cutoff = calendar.date(byAdding: .day, value: -30, to: now) else { return true }
+            return date >= cutoff
+        case .last90Days:
+            guard let cutoff = calendar.date(byAdding: .day, value: -90, to: now) else { return true }
+            return date >= cutoff
+        case .thisYear:
+            let currentYear = calendar.component(.year, from: now)
+            let dateYear = calendar.component(.year, from: date)
+            return dateYear == currentYear
         }
     }
 }
@@ -122,6 +172,27 @@ struct SessionDetailView: View {
                 LabeledContent("Avg Lap (No Outliers)", value: format(session.averageLapClean))
                 LabeledContent("Consistency (StdDev)", value: format(session.consistency))
             }
+
+            Section("Performance Intelligence") {
+                LabeledContent("Median Lap", value: format(session.medianLap))
+                LabeledContent("Opening Pace (First 5)", value: format(session.firstLapsAverage(count: 5)))
+                LabeledContent("Closing Pace (Last 5)", value: format(session.lastLapsAverage(count: 5)))
+                LabeledContent("Pace Delta (Last 5 vs First 5)") {
+                    if let delta = session.paceDeltaLastVsFirstFive {
+                        Text(formatDelta(delta))
+                            .foregroundStyle(delta <= 0 ? .green : .red)
+                    } else {
+                        Text("--")
+                    }
+                }
+                LabeledContent("Clean Lap Ratio") {
+                    if let ratio = session.cleanLapRatio {
+                        Text("\(Int((ratio * 100).rounded()))%")
+                    } else {
+                        Text("--")
+                    }
+                }
+            }
             
             Section("Laps") {
                 ForEach(session.safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
@@ -148,6 +219,11 @@ struct SessionDetailView: View {
     func format(_ value: TimeInterval?) -> String {
         guard let value = value else { return "--" }
         return String(format: "%.3f s", value)
+    }
+
+    func formatDelta(_ value: TimeInterval) -> String {
+        let sign = value > 0 ? "+" : ""
+        return String(format: "%@%.3f s", sign, value)
     }
 }
 
