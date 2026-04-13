@@ -1,35 +1,30 @@
 import SwiftUI
-import SwiftData
 import Charts
 
 struct TimeTrialView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
-    @StateObject private var syncMonitor = CloudSyncMonitor()
+    private let sessions = SampleData.standaloneHeats.sorted { $0.date > $1.date }
+    private let raceEvents = SampleData.races
+
     @State private var selectedCombo: TrackKartCombo? = nil
     @State private var selectedRange: HistoryRange = .all
-    
+
     var body: some View {
         NavigationSplitView {
             List {
-                ForEach(filteredSessions) { session in
+                ForEach(filteredSessions) { heat in
                     NavigationLink {
-                        SessionDetailView(session: session)
+                        SessionDetailView(heat: heat)
                     } label: {
-                        SessionRow(session: session)
+                        SessionRow(heat: heat)
                     }
                 }
-                .onDelete(perform: deleteItems)
             }
             .navigationTitle("Time Trials")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    SyncStatusDot(state: syncMonitor.syncState)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Picker("Combo", selection: $selectedCombo) {
                         Text("All Combos").tag(Optional<TrackKartCombo>.none)
-                        ForEach(TrackKartCombo.allCases) { combo in
+                        ForEach(availableCombos) { combo in
                             Text(combo.displayName).tag(Optional(combo))
                         }
                     }
@@ -45,24 +40,20 @@ struct TimeTrialView: View {
                 }
             }
         } detail: {
-            Text("Select a session")
+            RaceHistoryView(raceEvents: raceEvents)
         }
     }
-    
-    private var filteredSessions: [Session] {
+
+    private var availableCombos: [TrackKartCombo] {
+        let combos = Set(sessions.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        return combos.sorted { $0.displayName < $1.displayName }
+    }
+
+    private var filteredSessions: [Heat] {
         sessions.filter { session in
-            let comboMatches = selectedCombo == nil || session.trackKartCombo == selectedCombo
+            let comboMatches = selectedCombo == nil || (session.track == selectedCombo?.track && session.kart == selectedCombo?.kart)
             let rangeMatches = selectedRange.contains(session.date)
             return comboMatches && rangeMatches
-        }
-    }
-    
-    private func deleteItems(offsets: IndexSet) {
-        let source = filteredSessions
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(source[index])
-            }
         }
     }
 }
@@ -106,30 +97,22 @@ private enum HistoryRange: String, CaseIterable, Identifiable {
 }
 
 struct SessionRow: View {
-    let session: Session
-    
+    let heat: Heat
+
     var body: some View {
         VStack(alignment: .leading) {
-            Text(session.date.formatted(date: .abbreviated, time: .shortened))
+            Text(heat.date.formatted(date: .abbreviated, time: .shortened))
                 .font(.headline)
-            
-            if let combo = session.trackKartCombo {
-                Text(combo.displayName)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-            } else if let track = session.track {
-                Text(track.rawValue)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-            }
-            
+
+            Text("\(heat.track.rawValue) • \(heat.kart.rawValue)")
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+
             HStack {
-                if let best = session.bestLap {
+                if let best = heat.bestLap {
                     Label(String(format: "Best: %.2fs", best), systemImage: "stopwatch")
                 }
-                if session.safeLaps.count > 0 {
-                    Text("• \(session.safeLaps.count) Laps")
-                }
+                Text("• \(heat.laps.count) Laps")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -138,18 +121,22 @@ struct SessionRow: View {
 }
 
 struct SessionDetailView: View {
-    let session: Session
-    
+    let heat: Heat
+
+    private var sortedLaps: [Lap] {
+        heat.laps.sorted(by: { $0.lapNumber < $1.lapNumber })
+    }
+
     var body: some View {
         List {
             Section {
-                Chart(session.safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
+                Chart(sortedLaps) { lap in
                     LineMark(
                         x: .value("Lap", lap.lapNumber),
                         y: .value("Time", lap.duration)
                     )
                     .interpolationMethod(.catmullRom)
-                    
+
                     PointMark(
                         x: .value("Lap", lap.lapNumber),
                         y: .value("Time", lap.duration)
@@ -160,42 +147,20 @@ struct SessionDetailView: View {
             } header: {
                 Text("Lap Progression")
             }
-            
+
             Section("Stats") {
-                if let combo = session.trackKartCombo {
-                    LabeledContent("Setup", value: combo.displayName)
-                } else if let track = session.track {
-                    LabeledContent("Track", value: track.rawValue)
-                }
-                LabeledContent("Best Lap", value: format(session.bestLap))
-                LabeledContent("Avg Lap", value: format(session.averageLap))
-                LabeledContent("Avg Lap (No Outliers)", value: format(session.averageLapClean))
-                LabeledContent("Consistency (StdDev)", value: format(session.consistency))
+                LabeledContent("Track", value: heat.track.rawValue)
+                LabeledContent("Kart", value: heat.kart.rawValue)
+                LabeledContent("Best Lap", value: format(heat.bestLap))
+                LabeledContent("Avg Lap", value: format(heat.averageLap))
+                LabeledContent("Median Lap", value: format(heat.medianLap))
+                LabeledContent("Consistency (StdDev)", value: format(heat.consistency))
+                LabeledContent("Opening Pace (First 5)", value: format(heat.firstLapsAverage(count: 5)))
+                LabeledContent("Closing Pace (Last 5)", value: format(heat.lastLapsAverage(count: 5)))
             }
 
-            Section("Performance Intelligence") {
-                LabeledContent("Median Lap", value: format(session.medianLap))
-                LabeledContent("Opening Pace (First 5)", value: format(session.firstLapsAverage(count: 5)))
-                LabeledContent("Closing Pace (Last 5)", value: format(session.lastLapsAverage(count: 5)))
-                LabeledContent("Pace Delta (Last 5 vs First 5)") {
-                    if let delta = session.paceDeltaLastVsFirstFive {
-                        Text(formatDelta(delta))
-                            .foregroundStyle(delta <= 0 ? .green : .red)
-                    } else {
-                        Text("--")
-                    }
-                }
-                LabeledContent("Clean Lap Ratio") {
-                    if let ratio = session.cleanLapRatio {
-                        Text("\(Int((ratio * 100).rounded()))%")
-                    } else {
-                        Text("--")
-                    }
-                }
-            }
-            
             Section("Laps") {
-                ForEach(session.safeLaps.sorted(by: { $0.lapNumber < $1.lapNumber })) { lap in
+                ForEach(sortedLaps) { lap in
                     HStack {
                         Text("\(lap.lapNumber)")
                             .monospacedDigit()
@@ -204,8 +169,7 @@ struct SessionDetailView: View {
                         Text(format(lap.duration))
                             .monospaced()
                         Spacer()
-                        // Highlight best lap
-                        if lap.duration == session.bestLap {
+                        if lap.duration == heat.bestLap {
                             Image(systemName: "trophy.fill")
                                 .foregroundStyle(.yellow)
                         }
@@ -213,65 +177,21 @@ struct SessionDetailView: View {
                 }
             }
         }
-        .navigationTitle("Session Details")
+        .navigationTitle(heat.identifier)
     }
-    
-    func format(_ value: TimeInterval?) -> String {
+
+    private func format(_ value: TimeInterval?) -> String {
         guard let value = value else { return "--" }
         return String(format: "%.3f s", value)
     }
 
-    func formatDelta(_ value: TimeInterval) -> String {
-        let sign = value > 0 ? "+" : ""
-        return String(format: "%@%.3f s", sign, value)
-    }
-}
-
-struct SyncStatusDot: View {
-    let state: SyncState
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 8, height: 8)
-                .overlay {
-                    if state == .syncing {
-                        Circle()
-                            .stroke(dotColor.opacity(0.4), lineWidth: 2)
-                            .scaleEffect(1.8)
-                            .opacity(0)
-                            .animation(
-                                .easeOut(duration: 1.2)
-                                    .repeatForever(autoreverses: false),
-                                value: state
-                            )
-                    }
-                }
-        }
-    }
-
-    private var dotColor: Color {
-        switch state {
-        case .synced:       return .green
-        case .syncing:      return .orange
-        case .error:        return .red
-        case .notAvailable: return .gray
-        }
-    }
-
-    private var label: String {
-        switch state {
-        case .synced:       return "iCloud"
-        case .syncing:      return "Syncing"
-        case .error:        return "Sync Error"
-        case .notAvailable: return "Offline"
-        }
+    private func format(_ value: TimeInterval) -> String {
+        String(format: "%.3f s", value)
     }
 }
 
 struct RaceHistoryView: View {
-    @Query(sort: \RaceEvent.date, order: .reverse) private var raceEvents: [RaceEvent]
+    let raceEvents: [Race]
 
     var body: some View {
         NavigationSplitView {
@@ -280,24 +200,19 @@ struct RaceHistoryView: View {
                     ContentUnavailableView(
                         "No Race Events",
                         systemImage: "flag.checkered.2.crossed",
-                        description: Text("Seed race CSV data to see events here.")
+                        description: Text("No races loaded in SampleData.")
                     )
                 } else {
-                    ForEach(raceEvents) { event in
+                    ForEach(raceEvents) { race in
                         NavigationLink {
-                            RaceEventDetailView(event: event)
+                            RaceEventDetailView(race: race)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(event.name)
+                                Text("\(race.track.rawValue) • \(race.kart.rawValue)")
                                     .font(.headline)
-                                Text(event.date.formatted(date: .abbreviated, time: .shortened))
+                                Text("\(race.heats.count) heats")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                if let track = event.track {
-                                    Text(track.rawValue)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
                             }
                         }
                     }
@@ -320,46 +235,36 @@ struct RaceHistoryView: View {
 }
 
 struct RaceEventDetailView: View {
-    let event: RaceEvent
+    let race: Race
 
-    private var sortedSessions: [RaceSession] {
-        (event.sessions ?? []).sorted(by: { $0.startTime < $1.startTime })
+    private var sortedHeats: [Heat] {
+        race.heats.sorted(by: { $0.date < $1.date })
     }
 
     var body: some View {
         List {
             Section("Event") {
-                LabeledContent("Name", value: event.name)
-                LabeledContent("Date", value: event.date.formatted(date: .abbreviated, time: .shortened))
-                if let location = event.location {
-                    LabeledContent("Location", value: location)
-                }
-                if let track = event.track {
-                    LabeledContent("Track", value: track.rawValue)
-                } else if let trackName = event.trackName {
-                    LabeledContent("Track", value: trackName)
-                }
-                if let trackLengthKM = event.trackLengthKM {
-                    LabeledContent("Length", value: String(format: "%.2f km", trackLengthKM))
-                }
+                LabeledContent("Track", value: race.track.rawValue)
+                LabeledContent("Kart", value: race.kart.rawValue)
+                LabeledContent("Heats", value: "\(race.heats.count)")
             }
 
             Section("Sessions") {
-                if sortedSessions.isEmpty {
+                if sortedHeats.isEmpty {
                     Text("No sessions")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(sortedSessions) { session in
+                    ForEach(sortedHeats) { heat in
                         NavigationLink {
-                            RaceSessionDetailView(session: session)
+                            RaceSessionDetailView(heat: heat)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(session.runName)
+                                Text(heat.identifier)
                                     .font(.headline)
-                                Text(session.startTime.formatted(date: .abbreviated, time: .shortened))
+                                Text(heat.date.formatted(date: .abbreviated, time: .shortened))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(session.runType.displayName)
+                                Text(heat.type.label)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -368,47 +273,53 @@ struct RaceEventDetailView: View {
                 }
             }
         }
-        .navigationTitle(event.name)
+        .navigationTitle(race.track.rawValue)
     }
 }
 
 struct RaceSessionDetailView: View {
-    let session: RaceSession
+    let heat: Heat
 
-    private var sortedResults: [RaceResult] {
-        (session.results ?? []).sorted { lhs, rhs in
-            switch (lhs.position, rhs.position) {
-            case let (l?, r?):
-                return l < r
-            case (_?, nil):
-                return true
-            case (nil, _?):
-                return false
-            case (nil, nil):
-                return (lhs.driverName ?? "") < (rhs.driverName ?? "")
+    private var sortedResults: [DriverAggregate] {
+        Dictionary(grouping: heat.laps, by: { ($0.competitorID ?? $0.driverNumber ?? $0.driverName ?? "unknown") })
+            .values
+            .compactMap { laps in
+                guard !laps.isEmpty else { return nil }
+                let sorted = laps.sorted(by: { $0.lapNumber < $1.lapNumber })
+                let bestLap = sorted.map(\.duration).min()
+                let total = sorted.reduce(0.0) { $0 + $1.duration }
+                return DriverAggregate(
+                    id: sorted[0].competitorID ?? sorted[0].driverNumber ?? sorted[0].id.uuidString,
+                    driverNumber: sorted[0].driverNumber,
+                    driverName: sorted[0].driverName ?? "Unknown Driver",
+                    lapsCompleted: sorted.count,
+                    bestLapTime: bestLap,
+                    totalTime: total
+                )
             }
-        }
+            .sorted { lhs, rhs in
+                switch (lhs.bestLapTime, rhs.bestLapTime) {
+                case let (l?, r?):
+                    return l < r
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return lhs.driverName < rhs.driverName
+                }
+            }
     }
 
     var body: some View {
         List {
             Section("Session") {
-                LabeledContent("Run", value: session.runName)
-                LabeledContent("Type", value: session.runType.displayName)
-                LabeledContent("Day", value: session.day ?? "--")
-                LabeledContent("Start", value: session.startTime.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("Best Lap", value: format(session.bestLapTime))
-            }
-
-            if let stats = session.stats {
-                Section("Stats") {
-                    LabeledContent("Best Driver", value: stats.bestLapDriver ?? "--")
-                    LabeledContent("Best Lap", value: format(stats.bestLapTime))
-                    LabeledContent("Total Laps", value: format(stats.totalLaps))
-                    LabeledContent("Leader Laps", value: format(stats.totalLapsLeader))
-                    LabeledContent("Participants", value: format(stats.numParticipants))
-                    LabeledContent("Positions", value: format(stats.numPositions))
-                }
+                LabeledContent("Heat", value: heat.identifier)
+                LabeledContent("Type", value: heat.type.label)
+                LabeledContent("Start", value: heat.date.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("Track", value: heat.track.rawValue)
+                LabeledContent("Kart", value: heat.kart.rawValue)
+                LabeledContent("Best Lap", value: format(heat.bestLap))
             }
 
             Section("Results") {
@@ -416,13 +327,13 @@ struct RaceSessionDetailView: View {
                     Text("No results")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(sortedResults) { result in
+                    ForEach(Array(sortedResults.enumerated()), id: \.element.id) { index, result in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Text(result.position.map { "#\($0)" } ?? "--")
+                                Text("#\(index + 1)")
                                     .font(.subheadline)
                                     .bold()
-                                Text(result.driverName ?? "Unknown Driver")
+                                Text(result.displayName)
                                     .font(.subheadline)
                                 Spacer()
                                 Text(format(result.totalTime))
@@ -432,8 +343,7 @@ struct RaceSessionDetailView: View {
                             }
                             HStack(spacing: 12) {
                                 Text("Best: \(format(result.bestLapTime))")
-                                Text("Laps: \(format(result.lapsCompleted))")
-                                Text(result.finished ? "Finished" : "DNF")
+                                Text("Laps: \(result.lapsCompleted)")
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -442,32 +352,28 @@ struct RaceSessionDetailView: View {
                 }
             }
         }
-        .navigationTitle(session.runName)
+        .navigationTitle(heat.identifier)
     }
 
     private func format(_ value: TimeInterval?) -> String {
         guard let value else { return "--" }
         return String(format: "%.3f s", value)
     }
-
-    private func format(_ value: Int?) -> String {
-        guard let value else { return "--" }
-        return "\(value)"
-    }
 }
 
-private extension RaceSessionType {
+private struct DriverAggregate: Identifiable {
+    let id: String
+    let driverNumber: String?
+    let driverName: String
+    let lapsCompleted: Int
+    let bestLapTime: TimeInterval?
+    let totalTime: TimeInterval
+
     var displayName: String {
-        switch self {
-        case .race:
-            return "Race"
-        case .practice:
-            return "Practice"
-        case .quali:
-            return "Qualifying"
-        case .unknown:
-            return "Unknown"
+        if let driverNumber, !driverNumber.isEmpty {
+            return "#\(driverNumber) \(driverName)"
         }
+        return driverName
     }
 }
 

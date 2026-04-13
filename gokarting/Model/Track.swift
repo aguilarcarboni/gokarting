@@ -77,4 +77,5 @@ extension Track {
     var defaultKart: Kart {
         availableKarts.first ?? .fikKart
     }
+    
 }

@@ -1,39 +1,50 @@
 import SwiftUI
-import SwiftData
 import Charts
 
 struct ProgressionView: View {
-    @Query(sort: \Session.date) private var allSessions: [Session]
-    @Query(sort: \RaceSession.startTime) private var allRaceSessions: [RaceSession]
+    private let standaloneHeats = SampleData.standaloneHeats
+    private let races = SampleData.races
+
     @State private var selectedSource: ProgressionSource
     @State private var selectedSort: ProgressionSort = .date
-    @State private var selectedCombo: TrackKartCombo = TrackKartCombo.allCases.first!
+    @State private var selectedCombo: TrackKartCombo
     @State private var selectedRaceTrack: Track? = nil
 
     init(initialSource: ProgressionSource = .timeTrials) {
+        let defaultCombo = SampleData.standaloneHeats.first.map { TrackKartCombo(track: $0.track, kart: $0.kart) }
+            ?? TrackKartCombo.allCases.first
+            ?? TrackKartCombo(track: .fik, kart: .fikKart)
         _selectedSource = State(initialValue: initialSource)
+        _selectedCombo = State(initialValue: defaultCombo)
     }
 
-    private var filteredTimeTrialSessions: [Session] {
-        allSessions
-            .filter { $0.trackKartCombo == selectedCombo && !$0.safeLaps.isEmpty }
+    private var availableTimeTrialCombos: [TrackKartCombo] {
+        let combos = Set(standaloneHeats.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        return combos.sorted { $0.displayName < $1.displayName }
     }
 
-    private var filteredRaceSessions: [RaceSession] {
-        allRaceSessions
-            .filter { $0.runType == .race }
-            .filter { session in
-                selectedRaceTrack == nil || session.event?.track == selectedRaceTrack
-            }
-            .filter { $0.bestLapTime != nil }
+    private var raceHeats: [Heat] {
+        races.flatMap(\.heats).filter { $0.type == .race }
+    }
+
+    private var filteredTimeTrialHeats: [Heat] {
+        standaloneHeats
+            .filter { $0.track == selectedCombo.track && $0.kart == selectedCombo.kart }
+            .filter { !$0.laps.isEmpty }
+    }
+
+    private var filteredRaceHeats: [Heat] {
+        raceHeats
+            .filter { selectedRaceTrack == nil || $0.track == selectedRaceTrack }
+            .filter { $0.bestLap != nil }
     }
 
     private var timeTrialChartData: [DayPoint] {
-        filteredTimeTrialSessions.compactMap { session in
-            guard let averageLap = session.averageLap, let bestLap = session.bestLap else { return nil }
+        filteredTimeTrialHeats.compactMap { heat in
+            guard let averageLap = heat.averageLap, let bestLap = heat.bestLap else { return nil }
             return DayPoint(
-                date: session.date,
-                heatNumber: extractHeatNumber(from: session.note),
+                date: heat.date,
+                heatNumber: extractHeatNumber(from: heat.identifier),
                 averageLap: averageLap,
                 bestLap: bestLap,
                 sessionCount: 1
@@ -42,20 +53,20 @@ struct ProgressionView: View {
     }
 
     private var raceChartData: [DayPoint] {
-        filteredRaceSessions.compactMap { session in
-            guard let bestLapTime = session.bestLapTime else { return nil }
+        filteredRaceHeats.compactMap { heat in
+            guard let bestLap = heat.bestLap else { return nil }
             return DayPoint(
-                date: session.startTime,
-                heatNumber: extractHeatNumber(from: session.runName),
-                averageLap: bestLapTime,
-                bestLap: bestLapTime,
+                date: heat.date,
+                heatNumber: extractHeatNumber(from: heat.identifier),
+                averageLap: bestLap,
+                bestLap: bestLap,
                 sessionCount: 1
             )
         }
     }
 
     private var availableRaceTracks: [Track] {
-        let trackSet = Set(allRaceSessions.compactMap { $0.event?.track })
+        let trackSet = Set(raceHeats.map(\.track))
         return trackSet.sorted { $0.rawValue < $1.rawValue }
     }
 
@@ -106,10 +117,7 @@ struct ProgressionView: View {
 
     private var heatChartPoints: [ChartPoint] {
         heatChartData.enumerated().map { index, point in
-            ChartPoint(
-                point: point,
-                heatIndex: index + 1
-            )
+            ChartPoint(point: point, heatIndex: index + 1)
         }
     }
 
@@ -139,7 +147,7 @@ struct ProgressionView: View {
                 Section {
                     if selectedSource == .timeTrials {
                         Picker("Combo", selection: $selectedCombo) {
-                            ForEach(TrackKartCombo.allCases) { combo in
+                            ForEach(availableTimeTrialCombos) { combo in
                                 Text(combo.displayName).tag(combo)
                             }
                         }
@@ -198,8 +206,6 @@ struct ProgressionView: View {
             .navigationTitle("Progression")
         }
     }
-
-    // MARK: - Average Lap Chart
 
     private var averageLapChart: some View {
         Group {
@@ -260,8 +266,6 @@ struct ProgressionView: View {
         .frame(height: 220)
     }
 
-    // MARK: - Best Lap Chart
-
     private var bestLapChart: some View {
         Group {
             if selectedSort == .date {
@@ -321,8 +325,6 @@ struct ProgressionView: View {
         .frame(height: 220)
     }
 
-    // MARK: - Helpers
-
     private func format(_ value: TimeInterval) -> String {
         String(format: "%.2fs", value)
     }
@@ -348,18 +350,16 @@ struct ProgressionView: View {
 
     private var emptyStateDescription: String {
         if selectedSource == .timeTrials {
-            return "Record some sessions with \(selectedCombo.displayName) to see your progression."
+            return "No sessions found for \(selectedCombo.displayName)."
         }
 
         if let selectedRaceTrack {
             return "No race sessions found for \(selectedRaceTrack.rawValue)."
         }
 
-        return "Seed race CSV data to see race progression."
+        return "No race sessions found in SampleData."
     }
 }
-
-// MARK: - Chart Data Point
 
 private struct DayPoint: Identifiable {
     let id = UUID()

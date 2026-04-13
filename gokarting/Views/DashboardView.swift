@@ -6,50 +6,54 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct DashboardView: View {
-    @Query(sort: \RaceEvent.date, order: .reverse) private var raceEvents: [RaceEvent]
-    @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
+    private let standaloneHeats = SampleData.standaloneHeats
+    private let races = SampleData.races
 
-    private var latestRace: RaceEvent? {
-        raceEvents.first
+    private var raceHeats: [Heat] {
+        races
+            .flatMap(\.heats)
+            .sorted { $0.date > $1.date }
     }
 
-    private var latestTimeTrial: Session? {
-        sessions.first
+    private var latestRaceHeat: Heat? {
+        raceHeats.first(where: { $0.type == .race })
+    }
+
+    private var latestTimeTrial: Heat? {
+        standaloneHeats.sorted { $0.date > $1.date }.first
     }
 
     private var favoriteTrackName: String? {
-        var counts: [String: Int] = [:]
+        var counts: [Track: Int] = [:]
 
-        for session in sessions {
-            guard let trackName = session.track?.rawValue else { continue }
-            counts[trackName, default: 0] += 1
+        for heat in standaloneHeats {
+            counts[heat.track, default: 0] += 1
         }
 
-        for event in raceEvents {
-            let trackName = event.track?.rawValue ?? event.trackName
-            guard let trackName else { continue }
-            counts[trackName, default: 0] += 1
+        for heat in raceHeats {
+            counts[heat.track, default: 0] += 1
         }
 
         return counts.max(by: { lhs, rhs in
             if lhs.value == rhs.value {
-                return lhs.key > rhs.key
+                return lhs.key.rawValue > rhs.key.rawValue
             }
             return lhs.value < rhs.value
-        })?.key
+        })?.key.rawValue
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Latest Race") {
-                    if let latestRace {
-                        LabeledContent("Event", value: latestRace.name)
-                        LabeledContent("Date", value: latestRace.date.formatted(date: .abbreviated, time: .shortened))
-                        LabeledContent("Track", value: latestRace.track?.rawValue ?? latestRace.trackName ?? "--")
+                    if let latestRaceHeat {
+                        LabeledContent("Heat", value: latestRaceHeat.identifier)
+                        LabeledContent("Date", value: latestRaceHeat.date.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent("Track", value: latestRaceHeat.track.rawValue)
+                        LabeledContent("Kart", value: latestRaceHeat.kart.rawValue)
+                        LabeledContent("Best Lap", value: formatLapTime(latestRaceHeat.bestLap))
                     } else {
                         Text("No race data yet")
                             .foregroundStyle(.secondary)
@@ -58,8 +62,10 @@ struct DashboardView: View {
 
                 Section("Latest Time Trial") {
                     if let latestTimeTrial {
+                        LabeledContent("Heat", value: latestTimeTrial.identifier)
                         LabeledContent("Date", value: latestTimeTrial.date.formatted(date: .abbreviated, time: .shortened))
-                        LabeledContent("Track", value: latestTimeTrial.track?.rawValue ?? "--")
+                        LabeledContent("Track", value: latestTimeTrial.track.rawValue)
+                        LabeledContent("Kart", value: latestTimeTrial.kart.rawValue)
                         LabeledContent("Best Lap", value: formatLapTime(latestTimeTrial.bestLap))
                     } else {
                         Text("No time trial data yet")
