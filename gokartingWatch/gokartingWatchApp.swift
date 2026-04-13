@@ -14,6 +14,11 @@ struct gokartingWatch_Watch_AppApp: App {
         let schema = Schema([
             Session.self,
             Lap.self,
+            RaceEvent.self,
+            RaceSession.self,
+            RaceSessionStats.self,
+            RaceResult.self,
+            RaceCompetitorLap.self,
         ])
 
         let container: ModelContainer

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
-struct HistoryView: View {
+struct TimeTrialView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
     @StateObject private var syncMonitor = CloudSyncMonitor()
@@ -21,7 +21,7 @@ struct HistoryView: View {
                 }
                 .onDelete(perform: deleteItems)
             }
-            .navigationTitle("History")
+            .navigationTitle("Time Trials")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     SyncStatusDot(state: syncMonitor.syncState)
@@ -270,6 +270,207 @@ struct SyncStatusDot: View {
     }
 }
 
+struct RaceHistoryView: View {
+    @Query(sort: \RaceEvent.date, order: .reverse) private var raceEvents: [RaceEvent]
+
+    var body: some View {
+        NavigationSplitView {
+            List {
+                if raceEvents.isEmpty {
+                    ContentUnavailableView(
+                        "No Race Events",
+                        systemImage: "flag.checkered.2.crossed",
+                        description: Text("Seed race CSV data to see events here.")
+                    )
+                } else {
+                    ForEach(raceEvents) { event in
+                        NavigationLink {
+                            RaceEventDetailView(event: event)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(event.name)
+                                    .font(.headline)
+                                Text(event.date.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let track = event.track {
+                                    Text(track.rawValue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Race History")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        ProgressionView(initialSource: .races)
+                    } label: {
+                        Label("Progression", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                }
+            }
+        } detail: {
+            Text("Select an event")
+        }
+    }
+}
+
+struct RaceEventDetailView: View {
+    let event: RaceEvent
+
+    private var sortedSessions: [RaceSession] {
+        (event.sessions ?? []).sorted(by: { $0.startTime < $1.startTime })
+    }
+
+    var body: some View {
+        List {
+            Section("Event") {
+                LabeledContent("Name", value: event.name)
+                LabeledContent("Date", value: event.date.formatted(date: .abbreviated, time: .shortened))
+                if let location = event.location {
+                    LabeledContent("Location", value: location)
+                }
+                if let track = event.track {
+                    LabeledContent("Track", value: track.rawValue)
+                } else if let trackName = event.trackName {
+                    LabeledContent("Track", value: trackName)
+                }
+                if let trackLengthKM = event.trackLengthKM {
+                    LabeledContent("Length", value: String(format: "%.2f km", trackLengthKM))
+                }
+            }
+
+            Section("Sessions") {
+                if sortedSessions.isEmpty {
+                    Text("No sessions")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(sortedSessions) { session in
+                        NavigationLink {
+                            RaceSessionDetailView(session: session)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(session.runName)
+                                    .font(.headline)
+                                Text(session.startTime.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(session.runType.displayName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(event.name)
+    }
+}
+
+struct RaceSessionDetailView: View {
+    let session: RaceSession
+
+    private var sortedResults: [RaceResult] {
+        (session.results ?? []).sorted { lhs, rhs in
+            switch (lhs.position, rhs.position) {
+            case let (l?, r?):
+                return l < r
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return (lhs.driverName ?? "") < (rhs.driverName ?? "")
+            }
+        }
+    }
+
+    var body: some View {
+        List {
+            Section("Session") {
+                LabeledContent("Run", value: session.runName)
+                LabeledContent("Type", value: session.runType.displayName)
+                LabeledContent("Day", value: session.day ?? "--")
+                LabeledContent("Start", value: session.startTime.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("Best Lap", value: format(session.bestLapTime))
+            }
+
+            if let stats = session.stats {
+                Section("Stats") {
+                    LabeledContent("Best Driver", value: stats.bestLapDriver ?? "--")
+                    LabeledContent("Best Lap", value: format(stats.bestLapTime))
+                    LabeledContent("Total Laps", value: format(stats.totalLaps))
+                    LabeledContent("Leader Laps", value: format(stats.totalLapsLeader))
+                    LabeledContent("Participants", value: format(stats.numParticipants))
+                    LabeledContent("Positions", value: format(stats.numPositions))
+                }
+            }
+
+            Section("Results") {
+                if sortedResults.isEmpty {
+                    Text("No results")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(sortedResults) { result in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(result.position.map { "#\($0)" } ?? "--")
+                                    .font(.subheadline)
+                                    .bold()
+                                Text(result.driverName ?? "Unknown Driver")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text(format(result.totalTime))
+                                    .font(.caption)
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                            }
+                            HStack(spacing: 12) {
+                                Text("Best: \(format(result.bestLapTime))")
+                                Text("Laps: \(format(result.lapsCompleted))")
+                                Text(result.finished ? "Finished" : "DNF")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(session.runName)
+    }
+
+    private func format(_ value: TimeInterval?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%.3f s", value)
+    }
+
+    private func format(_ value: Int?) -> String {
+        guard let value else { return "--" }
+        return "\(value)"
+    }
+}
+
+private extension RaceSessionType {
+    var displayName: String {
+        switch self {
+        case .race:
+            return "Race"
+        case .practice:
+            return "Practice"
+        case .quali:
+            return "Qualifying"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+}
+
 #Preview {
-    HistoryView()
+    TimeTrialView()
 }

@@ -62,6 +62,8 @@ class DataSeeder {
     
     @MainActor
     static func seed(context: ModelContext) {
+        deduplicateSeededPracticeSessions(context: context)
+        deduplicateRaceData(context: context)
         assignDefaultKartsToLegacySessions(context: context)
 
         let existingIdentifiers = fetchExistingSeedIdentifiers(context: context)
@@ -86,6 +88,8 @@ class DataSeeder {
         if insertedCount > 0 {
             print("DataSeeder: Inserted \(insertedCount) new seed session(s)")
         }
+
+        seedRaceData(context: context)
     }
 
     @MainActor
@@ -127,6 +131,437 @@ class DataSeeder {
             let lap = Lap(lapNumber: i + 1, duration: d)
             lap.session = session
         }
+    }
+
+    @MainActor
+    private static func deduplicateSeededPracticeSessions(context: ModelContext) {
+        let descriptor = FetchDescriptor<Session>()
+        do {
+            let sessions = try context.fetch(descriptor)
+            let grouped = Dictionary(grouping: sessions.compactMap { session -> Session? in
+                guard let id = session.seedIdentifier, !id.isEmpty else { return nil }
+                return session
+            }, by: { $0.seedIdentifier! })
+
+            var deletedCount = 0
+            for (_, group) in grouped where group.count > 1 {
+                let sorted = group.sorted { lhs, rhs in
+                    if lhs.date != rhs.date { return lhs.date < rhs.date }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                for duplicate in sorted.dropFirst() {
+                    context.delete(duplicate)
+                    deletedCount += 1
+                }
+            }
+
+            if deletedCount > 0 {
+                try context.save()
+                print("DataSeeder: Removed \(deletedCount) duplicated seeded practice session(s)")
+            }
+        } catch {
+            print("DataSeeder: Failed to deduplicate seeded practice sessions: \(error)")
+        }
+    }
+
+    @MainActor
+    private static func deduplicateRaceData(context: ModelContext) {
+        do {
+            try deduplicateRaceEvents(context: context)
+            try deduplicateRaceSessions(context: context)
+        } catch {
+            print("DataSeeder: Failed to deduplicate race data: \(error)")
+        }
+    }
+
+    @MainActor
+    private static func deduplicateRaceEvents(context: ModelContext) throws {
+        let descriptor = FetchDescriptor<RaceEvent>()
+        let events = try context.fetch(descriptor)
+        let grouped = Dictionary(grouping: events.filter { !$0.eventId.isEmpty }, by: \.eventId)
+
+        var deletedCount = 0
+        for (_, group) in grouped where group.count > 1 {
+            let sorted = group.sorted { lhs, rhs in
+                if lhs.date != rhs.date { return lhs.date < rhs.date }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            guard let keep = sorted.first else { continue }
+            for duplicate in sorted.dropFirst() {
+                for session in duplicate.sessions ?? [] {
+                    session.event = keep
+                }
+                context.delete(duplicate)
+                deletedCount += 1
+            }
+        }
+
+        if deletedCount > 0 {
+            try context.save()
+            print("DataSeeder: Removed \(deletedCount) duplicated race event(s)")
+        }
+    }
+
+    @MainActor
+    private static func deduplicateRaceSessions(context: ModelContext) throws {
+        let descriptor = FetchDescriptor<RaceSession>()
+        let sessions = try context.fetch(descriptor)
+        let grouped = Dictionary(grouping: sessions.filter { !$0.sessionId.isEmpty }, by: \.sessionId)
+
+        var deletedCount = 0
+        for (_, group) in grouped where group.count > 1 {
+            let sorted = group.sorted { lhs, rhs in
+                if lhs.startTime != rhs.startTime { return lhs.startTime < rhs.startTime }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            guard let keep = sorted.first else { continue }
+
+            for duplicate in sorted.dropFirst() {
+                if keep.event == nil {
+                    keep.event = duplicate.event
+                }
+                if keep.stats == nil, let duplicateStats = duplicate.stats {
+                    duplicateStats.session = keep
+                }
+                for result in duplicate.results ?? [] {
+                    result.session = keep
+                }
+                for lap in duplicate.competitorLaps ?? [] {
+                    lap.session = keep
+                }
+                context.delete(duplicate)
+                deletedCount += 1
+            }
+        }
+
+        if deletedCount > 0 {
+            try context.save()
+            print("DataSeeder: Removed \(deletedCount) duplicated race session(s)")
+        }
+    }
+
+    // MARK: - Race CSV Seeding
+
+    @MainActor
+    private static func seedRaceData(context: ModelContext) {
+        let existingEventsByID = fetchExistingRaceEventsByID(context: context)
+        let existingSessionsByID = fetchExistingRaceSessionsByID(context: context)
+
+        let eventRows = parseCSVRows(from: hardcodedRaceEventsCSV)
+        let sessionRows = parseCSVRows(from: hardcodedRaceSessionsCSV)
+
+        var eventsByID = existingEventsByID
+        var sessionsByID = existingSessionsByID
+
+        var insertedEvents = 0
+        for row in eventRows {
+            guard let eventID = normalizedValue(row["id"]),
+                  eventsByID[eventID] == nil,
+                  let name = normalizedValue(row["name"]),
+                  let date = parseCSVDate(normalizedValue(row["date"])) else {
+                continue
+            }
+
+            let trackName = normalizedValue(row["track_name"])
+            let event = RaceEvent(
+                eventId: eventID,
+                name: name,
+                date: date,
+                location: normalizedValue(row["location"]),
+                trackName: trackName,
+                trackLengthKM: parseDouble(row["track_length_km"]),
+                track: mapRaceTrack(trackName: trackName, eventName: name)
+            )
+            context.insert(event)
+            eventsByID[eventID] = event
+            insertedEvents += 1
+        }
+
+        var insertedSessions = 0
+        for row in sessionRows {
+            guard let sessionID = normalizedValue(row["session_id"]),
+                  sessionsByID[sessionID] == nil,
+                  let runName = normalizedValue(row["run_name"]),
+                  let startTime = parseCSVDate(normalizedValue(row["start_time"])) else {
+                continue
+            }
+
+            let runTypeRaw = parseInt(row["run_type"]) ?? RaceSessionType.unknown.rawValue
+            let session = RaceSession(
+                sessionId: sessionID,
+                day: normalizedValue(row["day"]),
+                runName: runName,
+                runTypeRaw: runTypeRaw,
+                startTime: startTime,
+                bestLapTime: parseTimeInterval(row["best_lap_time"])
+            )
+            if let eventID = normalizedValue(row["event_id"]) {
+                session.event = eventsByID[eventID]
+            }
+            context.insert(session)
+            sessionsByID[sessionID] = session
+            insertedSessions += 1
+        }
+
+        seedSessionData(
+            context: context,
+            statsRows: parseCSVRows(from: hardcodedQualiSessionStatsCSV),
+            resultRows: parseCSVRows(from: hardcodedQualiResultsCSV),
+            lapRows: parseCSVRows(from: hardcodedQualiCompetitorLapsCSV),
+            expectedType: .quali,
+            sessionsByID: sessionsByID
+        )
+
+        seedSessionData(
+            context: context,
+            statsRows: parseCSVRows(from: hardcodedRaceSessionStatsCSV),
+            resultRows: parseCSVRows(from: hardcodedRaceResultsCSV),
+            lapRows: parseCSVRows(from: hardcodedRaceCompetitorLapsCSV),
+            expectedType: .race,
+            sessionsByID: sessionsByID
+        )
+
+        if insertedEvents > 0 || insertedSessions > 0 {
+            print("DataSeeder: Inserted \(insertedEvents) race event(s), \(insertedSessions) race session(s)")
+        }
+    }
+
+    @MainActor
+    private static func seedSessionData(
+        context: ModelContext,
+        statsRows: [[String: String]],
+        resultRows: [[String: String]],
+        lapRows: [[String: String]],
+        expectedType: RaceSessionType,
+        sessionsByID: [String: RaceSession]
+    ) {
+        guard !statsRows.isEmpty else { return }
+
+        var targetSessions: [RaceSession] = []
+        for row in statsRows {
+            guard let sessionID = normalizedValue(row["session_id"]),
+                  let session = sessionsByID[sessionID],
+                  session.runType == expectedType else {
+                continue
+            }
+            targetSessions.append(session)
+
+            guard session.stats == nil else { continue }
+            let stats = RaceSessionStats(
+                bestLapDriver: normalizedValue(row["best_lap_driver"]),
+                bestLapTime: parseTimeInterval(row["best_lap_time"]),
+                totalLaps: parseInt(row["total_laps"]),
+                totalLapsLeader: parseInt(row["total_laps_leader"]),
+                numParticipants: parseInt(row["num_participants"]),
+                numPositions: parseInt(row["num_positions"])
+            )
+            stats.session = session
+            context.insert(stats)
+        }
+
+        let uniqueTargets = Dictionary(grouping: targetSessions, by: \.sessionId).compactMap(\.value.first)
+        guard uniqueTargets.count == 1, let targetSession = uniqueTargets.first else {
+            if uniqueTargets.count > 1 {
+                print("DataSeeder: Multiple \(expectedType) sessions found but shared CSV rows have no session_id in results/laps. Skipping detailed rows.")
+            }
+            return
+        }
+
+        if (targetSession.results?.isEmpty ?? true) {
+            for row in resultRows {
+                let result = RaceResult(
+                    position: parseInt(row["position"]),
+                    driverName: normalizedValue(row["driver_name"]),
+                    driverNumber: normalizedValue(row["driver_number"]),
+                    competitorId: normalizedValue(row["competitor_id"]),
+                    lapsCompleted: parseInt(row["laps_completed"]),
+                    bestLapTime: parseTimeInterval(row["best_lap_time"]),
+                    lastLapTime: parseTimeInterval(row["last_lap_time"]),
+                    totalTime: parseTimeInterval(row["total_time"]),
+                    gapToLeader: normalizedValue(row["gap_to_leader"]),
+                    gapToPrevious: normalizedValue(row["gap_to_previous"]),
+                    avgSpeed: parseDouble(row["avg_speed"]),
+                    avgTime: parseTimeInterval(row["avg_time"]),
+                    marker: parseInt(row["marker"]),
+                    finished: parseBool(row["finished"])
+                )
+                result.session = targetSession
+                context.insert(result)
+            }
+        }
+
+        if (targetSession.competitorLaps?.isEmpty ?? true) {
+            for row in lapRows {
+                let lap = RaceCompetitorLap(
+                    competitorId: normalizedValue(row["competitor_id"]),
+                    driverName: normalizedValue(row["driver_name"]),
+                    driverNumber: normalizedValue(row["driver_number"]),
+                    lapNumber: parseInt(row["lap_number"]),
+                    lapTime: parseTimeInterval(row["lap_time"]),
+                    lastTimeOfDay: normalizedValue(row["last_time_of_day"]),
+                    gapToLeader: normalizedValue(row["gap_to_leader"]),
+                    gapToPrevious: normalizedValue(row["gap_to_previous"]),
+                    gapToBest: normalizedValue(row["gap_to_best"]),
+                    isBestLap: parseBool(row["is_best_lap"]),
+                    finished: parseBool(row["finished"]),
+                    sector1: parseTimeInterval(row["sector1"]),
+                    sector2: parseTimeInterval(row["sector2"]),
+                    sector3: parseTimeInterval(row["sector3"])
+                )
+                lap.session = targetSession
+                context.insert(lap)
+            }
+        }
+    }
+
+    @MainActor
+    private static func fetchExistingRaceEventsByID(context: ModelContext) -> [String: RaceEvent] {
+        let descriptor = FetchDescriptor<RaceEvent>()
+        do {
+            return try context.fetch(descriptor).reduce(into: [:]) { map, event in
+                map[event.eventId] = event
+            }
+        } catch {
+            print("DataSeeder: Failed to fetch existing race events: \(error)")
+            return [:]
+        }
+    }
+
+    @MainActor
+    private static func fetchExistingRaceSessionsByID(context: ModelContext) -> [String: RaceSession] {
+        let descriptor = FetchDescriptor<RaceSession>()
+        do {
+            return try context.fetch(descriptor).reduce(into: [:]) { map, session in
+                map[session.sessionId] = session
+            }
+        } catch {
+            print("DataSeeder: Failed to fetch existing race sessions: \(error)")
+            return [:]
+        }
+    }
+
+    private static func parseCSVRows(from text: String) -> [[String: String]] {
+        let rawLines = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+
+        guard let headerLine = rawLines.first else { return [] }
+        let headers = parseCSVLine(headerLine)
+
+        return rawLines.dropFirst().map { line in
+            let values = parseCSVLine(line)
+            var row: [String: String] = [:]
+            for (index, header) in headers.enumerated() where index < values.count {
+                row[header] = values[index]
+            }
+            return row
+        }
+    }
+
+    private static func parseCSVLine(_ line: String) -> [String] {
+        var values: [String] = []
+        var current = ""
+        var isInQuotes = false
+        var index = line.startIndex
+
+        while index < line.endIndex {
+            let char = line[index]
+            if char == "\"" {
+                let nextIndex = line.index(after: index)
+                if isInQuotes, nextIndex < line.endIndex, line[nextIndex] == "\"" {
+                    current.append("\"")
+                    index = nextIndex
+                } else {
+                    isInQuotes.toggle()
+                }
+            } else if char == ",", !isInQuotes {
+                values.append(current)
+                current = ""
+            } else {
+                current.append(char)
+            }
+            index = line.index(after: index)
+        }
+        values.append(current)
+        return values.map {
+            $0
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\u{feff}", with: "")
+        }
+    }
+
+    private static let csvDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "dd-MM-yyyy HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    private static func parseCSVDate(_ value: String?) -> Date? {
+        guard let value = normalizedValue(value) else { return nil }
+        return csvDateFormatter.date(from: value)
+    }
+
+    private static func parseInt(_ value: String?) -> Int? {
+        guard let value = normalizedValue(value) else { return nil }
+        return Int(value)
+    }
+
+    private static func parseDouble(_ value: String?) -> Double? {
+        guard let value = normalizedValue(value) else { return nil }
+        return Double(value)
+    }
+
+    private static func parseBool(_ value: String?) -> Bool {
+        guard let value = normalizedValue(value)?.lowercased() else { return false }
+        return value == "true" || value == "1" || value == "yes"
+    }
+
+    private static func parseTimeInterval(_ value: String?) -> TimeInterval? {
+        guard let value = normalizedValue(value) else { return nil }
+        if let seconds = Double(value) {
+            return seconds
+        }
+
+        let parts = value.split(separator: ":").map(String.init)
+        if parts.count == 2 {
+            guard let minutes = Double(parts[0]), let seconds = Double(parts[1]) else { return nil }
+            return (minutes * 60) + seconds
+        }
+        if parts.count == 3 {
+            guard let hours = Double(parts[0]),
+                  let minutes = Double(parts[1]),
+                  let seconds = Double(parts[2]) else { return nil }
+            return (hours * 3600) + (minutes * 60) + seconds
+        }
+        return nil
+    }
+
+    private static func normalizedValue(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func mapRaceTrack(trackName: String?, eventName: String?) -> Track? {
+        let combined = "\(trackName ?? "") \(eventName ?? "")".lowercased()
+        if combined.contains("p1") && combined.contains("inverse") {
+            return .p1SpeedwayInverse
+        }
+        if combined.contains("p1") && combined.contains("short") {
+            return .p1ShortConfig
+        }
+        if combined.contains("p1") {
+            return .p1Speedway
+        }
+        if combined.contains("rental") {
+            return .p1ShortConfig
+        }
+        return nil
     }
     
     // MARK: - Seed Data Definitions
@@ -519,10 +954,37 @@ class DataSeeder {
             SeedSessionData(
                 identifier: "p1speedway-2026-02-08-heat-2",
                 year: 2026, month: 2, day: 8, hour: 11, minute: 30,
-                note: "Heat 2", track: .p1Speedway, kart: .tillotsonT4,
+                note: "Heat 2", track: .p1Speedway, kart: .sodiRental,
                 laps: [
                     75.21, 74.49, 73.73, 73.10, 74.35,
                     73.27, 74.18, 73.19, 73.63, 73.49
+                ]
+            ),
+
+            // April 9, 2026 (P1 Speedway Inverse)
+            SeedSessionData(
+                identifier: "p1speedwayinverse-2026-04-09-heat-1",
+                year: 2026, month: 4, day: 9, hour: 16, minute: 13,
+                note: "Heat 1", track: .p1SpeedwayInverse,
+                laps: [
+                    87.987, 82.762, 84.400, 80.101, 79.324,
+                    79.555, 78.731, 80.567, 78.747
+                ]
+            ),
+            SeedSessionData(
+                identifier: "p1speedwayinverse-2026-04-09-heat-2",
+                year: 2026, month: 4, day: 9, hour: 16, minute: 50,
+                note: "Heat 2", track: .p1SpeedwayInverse,
+                laps: [
+                    81.392, 78.362, 78.696, 79.748
+                ]
+            ),
+            SeedSessionData(
+                identifier: "p1speedwayinverse-2026-04-09-heat-3",
+                year: 2026, month: 4, day: 9, hour: 17, minute: 21,
+                note: "Heat 3", track: .p1SpeedwayInverse,
+                laps: [
+                    79.923, 93.808, 79.705, 79.873
                 ]
             ),
         ]

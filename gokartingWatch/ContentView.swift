@@ -16,5 +16,16 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Session.self, Lap.self], inMemory: true)
+        .modelContainer(
+            for: [
+                Session.self,
+                Lap.self,
+                RaceEvent.self,
+                RaceSession.self,
+                RaceSessionStats.self,
+                RaceResult.self,
+                RaceCompetitorLap.self,
+            ],
+            inMemory: true
+        )
 }
