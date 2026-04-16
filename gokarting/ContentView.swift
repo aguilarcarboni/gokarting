@@ -8,6 +8,11 @@ struct ContentView: View {
                     Label("Dashboard", systemImage: "gauge.with.dots.needle.50percent")
                 }
 
+            LiveTimingView()
+                .tabItem {
+                    Label("Session", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                }
+
             TimeTrialView()
                 .tabItem {
                     Label("Time Trials", systemImage: "stopwatch")

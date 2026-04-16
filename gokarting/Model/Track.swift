@@ -59,6 +59,36 @@ struct TrackKartCombo: Hashable, Identifiable {
 }
 
 extension Track {
+    var gatePoints: (pointA: GeoCoordinate, pointB: GeoCoordinate) {
+        switch self {
+        case .p1Speedway:
+            return (
+                pointA: GeoCoordinate(latitude: 9.961719, longitude: -84.134378),
+                pointB: GeoCoordinate(latitude: 9.961654, longitude: -84.134288)
+            )
+        case .p1ShortConfig:
+            return (
+                pointA: GeoCoordinate(latitude: 9.961719, longitude: -84.134378),
+                pointB: GeoCoordinate(latitude: 9.961654, longitude: -84.134288)
+            )
+        case .p1SpeedwayInverse:
+            return (
+                pointA: GeoCoordinate(latitude: 9.961719, longitude: -84.134378),
+                pointB: GeoCoordinate(latitude: 9.961654, longitude: -84.134288)
+            )
+        case .fik:
+            return (
+                pointA: GeoCoordinate(latitude: 9.961719, longitude: -84.134378),
+                pointB: GeoCoordinate(latitude: 9.961654, longitude: -84.134288)
+            )
+        case .formulaKart:
+            return (
+                pointA: GeoCoordinate(latitude: 9.92237, longitude: -84.03611),
+                pointB: GeoCoordinate(latitude: 9.92233, longitude: -84.03616)
+            )
+        }
+    }
+
     var availableKarts: [Kart] {
         switch self {
         case .fik:
