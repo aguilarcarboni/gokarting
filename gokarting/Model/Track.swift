@@ -81,8 +81,8 @@ extension Track {
             )
         case .fik:
             return (
-                pointA: GeoCoordinate(latitude: 9.961719, longitude: -84.134378),
-                pointB: GeoCoordinate(latitude: 9.961654, longitude: -84.134288)
+                pointA: GeoCoordinate(latitude: 9.96260, longitude: -84.19974),
+                pointB: GeoCoordinate(latitude: 9.96258, longitude: -84.19973)
             )
         case .formulaKart:
             return (
@@ -117,5 +117,17 @@ extension Track {
     var defaultKart: Kart {
         availableKarts.first ?? .fikKart
     }
-    
+
+    var supportedRaceDirections: [RaceDirection] {
+        switch self {
+        case .p1SpeedwayInverse, .fik:
+            return [.clockwise]
+        case .p1Speedway, .p1ShortConfig, .test, .formulaKart:
+            return [.counterClockwise]
+        }
+    }
+
+    var defaultRaceDirection: RaceDirection {
+        supportedRaceDirections.first ?? .clockwise
+    }
 }

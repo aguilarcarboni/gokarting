@@ -1,8 +1,10 @@
 import SwiftUI
+import MapKit
 
 struct LapView: View {
     let lap: Lap
     let heat: Heat
+    @State private var lapCameraPosition: MapCameraPosition = .automatic
 
     private var lapCompetitor: HeatCompetitor {
         heat.competitor(for: lap)
@@ -16,6 +18,37 @@ struct LapView: View {
     private var deltaToAverage: TimeInterval? {
         guard let average = heat.averageLap(for: lapCompetitor) else { return nil }
         return lap.duration - average
+    }
+
+    private var lapPolyline: [CLLocationCoordinate2D] {
+        sanitizedLapRoute.map(\.clCoordinate)
+    }
+
+    private var sanitizedLapRoute: [GeoCoordinate] {
+        let validPoints = lap.route.filter { point in
+            (-90.0 ... 90.0).contains(point.latitude)
+            && (-180.0 ... 180.0).contains(point.longitude)
+            && !(abs(point.latitude) < 0.000001 && abs(point.longitude) < 0.000001)
+        }
+
+        guard validPoints.count > 2 else { return validPoints }
+
+        let avgLatitude = validPoints.map(\.latitude).reduce(0, +) / Double(validPoints.count)
+        let avgLongitude = validPoints.map(\.longitude).reduce(0, +) / Double(validPoints.count)
+        let center = CLLocation(latitude: avgLatitude, longitude: avgLongitude)
+
+        return validPoints.filter { point in
+            let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
+            return center.distance(from: location) <= 2_500
+        }
+    }
+
+    private var startCoordinate: CLLocationCoordinate2D? {
+        lapPolyline.first
+    }
+
+    private var finishCoordinate: CLLocationCoordinate2D? {
+        lapPolyline.last
     }
 
     var body: some View {
@@ -43,6 +76,57 @@ struct LapView: View {
                     }
                 }
 
+                card(title: "Lap Line") {
+                    if lapPolyline.count > 1 {
+                        Map(position: $lapCameraPosition, interactionModes: [.zoom, .pan]) {
+                            MapPolyline(coordinates: lapPolyline)
+                                .stroke(.cyan, lineWidth: 4)
+
+                            if let startCoordinate {
+                                Marker("Start", coordinate: startCoordinate)
+                                    .tint(.green)
+                            }
+
+                            if let finishCoordinate {
+                                Marker("Finish", coordinate: finishCoordinate)
+                                    .tint(.red)
+                            }
+                        }
+                        .mapStyle(.standard(elevation: .realistic))
+                        .mapControls {
+                            MapCompass()
+                            MapScaleView()
+                        }
+                        .frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        Text("No valid lap route available for this lap.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if lap.telemetry != nil || lap.speedAtCrossingMPS != nil || lap.crossedAt != nil {
+                    card(title: "Telemetry") {
+                        VStack(spacing: 8) {
+                            if let crossedAt = lap.crossedAt {
+                                statRow(title: "Crossed At", value: crossedAt.formatted(date: .abbreviated, time: .shortened))
+                            }
+                            if let speedAtCrossingMPS = lap.speedAtCrossingMPS {
+                                statRow(title: "Crossing Speed", value: String(format: "%.2f m/s", speedAtCrossingMPS))
+                            }
+                            if let telemetry = lap.telemetry {
+                                statRow(title: "Longitudinal Accel", value: String(format: "%.2f g", telemetry.maxLongitudinalAccel))
+                                statRow(title: "Lateral Accel", value: String(format: "%.2f g", telemetry.maxLateralAccel))
+                                statRow(title: "Yaw Rate", value: String(format: "%.2f rad/s", telemetry.maxYawRate))
+                                statRow(title: "Avg Speed", value: String(format: "%.2f m/s", telemetry.averageSpeedMPS))
+                                statRow(title: "Peak Speed", value: String(format: "%.2f m/s", telemetry.peakSpeedMPS))
+                                statRow(title: "Distance", value: String(format: "%.1f m", telemetry.distanceMeters))
+                                statRow(title: "Samples", value: "\(telemetry.sampleCount)")
+                            }
+                        }
+                    }
+                }
+
                 if lap.driverName != nil || lap.driverNumber != nil || lap.competitorID != nil {
                     card(title: "Driver") {
                         VStack(spacing: 8) {
@@ -60,6 +144,11 @@ struct LapView: View {
         .appScreenBackground()
         .navigationTitle("Lap #\(lap.lapNumber)")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if let region = mapRegionForLapRoute() {
+                lapCameraPosition = .region(region)
+            }
+        }
     }
 
     private var headerCard: some View {
@@ -154,6 +243,33 @@ struct LapView: View {
     private func formatDelta(_ value: TimeInterval?) -> String {
         guard let value else { return "--" }
         return String(format: "%@%.3fs", value >= 0 ? "+" : "-", abs(value))
+    }
+
+    private func mapRegionForLapRoute() -> MKCoordinateRegion? {
+        guard !sanitizedLapRoute.isEmpty else { return nil }
+
+        let latitudes = sanitizedLapRoute.map(\.latitude)
+        let longitudes = sanitizedLapRoute.map(\.longitude)
+
+        guard let minLat = latitudes.min(),
+              let maxLat = latitudes.max(),
+              let minLon = longitudes.min(),
+              let maxLon = longitudes.max() else {
+            return nil
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+
+        let latDelta = max(0.0008, (maxLat - minLat) * 1.6)
+        let lonDelta = max(0.0008, (maxLon - minLon) * 1.6)
+
+        return MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+        )
     }
 }
 

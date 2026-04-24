@@ -1,5 +1,15 @@
 import Foundation
 
+struct LapTelemetry: Hashable, Codable {
+    let maxLongitudinalAccel: Double
+    let maxLateralAccel: Double
+    let maxYawRate: Double
+    let averageSpeedMPS: Double
+    let peakSpeedMPS: Double
+    let distanceMeters: Double
+    let sampleCount: Int
+}
+
 struct Lap: Identifiable, Hashable, Codable {
     let id: UUID
     private(set) var track: Track
@@ -10,6 +20,10 @@ struct Lap: Identifiable, Hashable, Codable {
     let lapNumber: Int
     let duration: TimeInterval
     let timestamp: Date
+    let crossedAt: Date?
+    let speedAtCrossingMPS: Double?
+    let telemetry: LapTelemetry?
+    let route: [GeoCoordinate]
 
     init(
         id: UUID = UUID(),
@@ -20,7 +34,11 @@ struct Lap: Identifiable, Hashable, Codable {
         driverNumber: String? = nil,
         lapNumber: Int,
         duration: TimeInterval,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        crossedAt: Date? = nil,
+        speedAtCrossingMPS: Double? = nil,
+        telemetry: LapTelemetry? = nil,
+        route: [GeoCoordinate] = []
     ) {
         self.id = id
         self.track = track
@@ -31,6 +49,10 @@ struct Lap: Identifiable, Hashable, Codable {
         self.lapNumber = lapNumber
         self.duration = duration
         self.timestamp = timestamp
+        self.crossedAt = crossedAt
+        self.speedAtCrossingMPS = speedAtCrossingMPS
+        self.telemetry = telemetry
+        self.route = route
     }
 
     mutating func inheritCombo(track: Track, kart: Kart) {

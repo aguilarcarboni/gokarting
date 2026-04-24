@@ -7,6 +7,22 @@ enum HeatType: String, CaseIterable, Codable {
     case practice
 }
 
+struct LiveSessionMetadata: Hashable, Codable {
+    let source: String
+    let startedAt: Date
+    let endedAt: Date
+    let durationSeconds: TimeInterval
+    let raceDirection: RaceDirection
+    let gateCrossingsCount: Int
+    let sampleCount: Int
+    let totalDistanceMeters: Double
+    let averageSpeedMPS: Double
+    let peakSpeedMPS: Double
+    let peakAccelerationG: Double
+    let peakDecelerationG: Double
+    let peakYawRate: Double
+}
+
 struct HeatCompetitor: Identifiable, Hashable {
     let id: String
     let competitorID: String?
@@ -38,6 +54,7 @@ struct Heat: Identifiable, Hashable, Codable {
     private(set) var kart: Kart
     private(set) var laps: [Lap]
     private(set) var date: Date
+    private(set) var sessionMetadata: LiveSessionMetadata?
 
     static let minimumLaps = 1
     static let maximumLaps = 200
@@ -83,7 +100,8 @@ struct Heat: Identifiable, Hashable, Codable {
         track: Track,
         kart: Kart,
         laps: [Lap],
-        date: Date = Date()
+        date: Date = Date(),
+        sessionMetadata: LiveSessionMetadata? = nil
     ) {
         self.id = id
         self.identifier = identifier
@@ -97,6 +115,7 @@ struct Heat: Identifiable, Hashable, Codable {
 
         self.laps = Self.normalizeLaps(laps, track: self.track, kart: self.kart)
         self.date = date
+        self.sessionMetadata = sessionMetadata
     }
 
     init(
@@ -107,12 +126,23 @@ struct Heat: Identifiable, Hashable, Codable {
         track: Track,
         kart: Kart,
         lapDurations: [TimeInterval],
-        date: Date = Date()
+        date: Date = Date(),
+        sessionMetadata: LiveSessionMetadata? = nil
     ) {
         let mappedLaps = lapDurations.enumerated().map { index, duration in
             Lap(track: track, kart: kart, lapNumber: index + 1, duration: duration, timestamp: date)
         }
-        self.init(id: id, identifier: identifier, type: type, carNumber: carNumber, track: track, kart: kart, laps: mappedLaps, date: date)
+        self.init(
+            id: id,
+            identifier: identifier,
+            type: type,
+            carNumber: carNumber,
+            track: track,
+            kart: kart,
+            laps: mappedLaps,
+            date: date,
+            sessionMetadata: sessionMetadata
+        )
     }
 
     mutating func pickTrack(_ track: Track) {

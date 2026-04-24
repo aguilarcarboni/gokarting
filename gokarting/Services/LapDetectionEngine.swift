@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 final class LapDetectionEngine {
     private(set) var config: RecordingConfig
@@ -12,6 +13,11 @@ final class LapDetectionEngine {
     private var currentLapMaxLongitudinalAccel: Double = 0
     private var currentLapMaxLateralAccel: Double = 0
     private var currentLapMaxYawRate: Double = 0
+    private var currentLapSpeedSum: Double = 0
+    private var currentLapPeakSpeed: Double = 0
+    private var currentLapDistanceMeters: Double = 0
+    private var currentLapSampleCount: Int = 0
+    private var currentLapRoute: [GeoCoordinate] = []
 
     init(config: RecordingConfig) {
         self.config = config
@@ -31,6 +37,7 @@ final class LapDetectionEngine {
     @discardableResult
     func ingest(_ sample: TelemetrySample) -> RecordedLap? {
         route.append(sample.coordinate)
+        currentLapRoute.append(sample.coordinate)
         updateCurrentLapTelemetry(with: sample)
 
         guard let previousSample else {
@@ -92,6 +99,7 @@ final class LapDetectionEngine {
                 "Gate crossed: timer armed at \(sample.timestamp) (speed \(String(format: "%.2f", crossingSpeed)) m/s)"
             )
             resetCurrentLapTelemetry()
+            currentLapRoute.append(sample.coordinate)
             return nil
         }
 
@@ -110,8 +118,13 @@ final class LapDetectionEngine {
             telemetry: LapTelemetrySummary(
                 maxLongitudinalAccel: currentLapMaxLongitudinalAccel,
                 maxLateralAccel: currentLapMaxLateralAccel,
-                maxYawRate: currentLapMaxYawRate
-            )
+                maxYawRate: currentLapMaxYawRate,
+                averageSpeedMPS: currentLapSampleCount > 0 ? currentLapSpeedSum / Double(currentLapSampleCount) : 0,
+                peakSpeedMPS: currentLapPeakSpeed,
+                distanceMeters: currentLapDistanceMeters,
+                sampleCount: currentLapSampleCount
+            ),
+            route: currentLapRoute
         )
 
         laps.append(lap)
@@ -121,10 +134,27 @@ final class LapDetectionEngine {
             "Gate crossed: completed lap \(lap.number) in \(String(format: "%.3f", lap.durationSeconds))s at \(sample.timestamp)"
         )
         resetCurrentLapTelemetry()
+        currentLapRoute.append(sample.coordinate)
         return lap
     }
 
     private func updateCurrentLapTelemetry(with sample: TelemetrySample) {
+        currentLapSpeedSum += sample.speedMPS
+        currentLapPeakSpeed = max(currentLapPeakSpeed, sample.speedMPS)
+        currentLapSampleCount += 1
+
+        if let previousSample {
+            let previous = CLLocation(
+                latitude: previousSample.coordinate.latitude,
+                longitude: previousSample.coordinate.longitude
+            )
+            let current = CLLocation(
+                latitude: sample.coordinate.latitude,
+                longitude: sample.coordinate.longitude
+            )
+            currentLapDistanceMeters += current.distance(from: previous)
+        }
+
         if let accelerationX = sample.accelerationX {
             currentLapMaxLongitudinalAccel = max(currentLapMaxLongitudinalAccel, abs(accelerationX))
         }
@@ -140,5 +170,10 @@ final class LapDetectionEngine {
         currentLapMaxLongitudinalAccel = 0
         currentLapMaxLateralAccel = 0
         currentLapMaxYawRate = 0
+        currentLapSpeedSum = 0
+        currentLapPeakSpeed = 0
+        currentLapDistanceMeters = 0
+        currentLapSampleCount = 0
+        currentLapRoute = []
     }
 }

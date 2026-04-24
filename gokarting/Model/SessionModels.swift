@@ -113,6 +113,10 @@ struct LapTelemetrySummary: Hashable {
     let maxLongitudinalAccel: Double
     let maxLateralAccel: Double
     let maxYawRate: Double
+    let averageSpeedMPS: Double
+    let peakSpeedMPS: Double
+    let distanceMeters: Double
+    let sampleCount: Int
 }
 
 struct RecordedLap: Identifiable, Hashable {
@@ -122,6 +126,7 @@ struct RecordedLap: Identifiable, Hashable {
     let crossedAt: Date
     let speedAtCrossingMPS: Double
     let telemetry: LapTelemetrySummary
+    let route: [GeoCoordinate]
 }
 
 struct RecordedGateCrossing: Identifiable, Hashable {

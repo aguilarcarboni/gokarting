@@ -66,6 +66,24 @@ struct HeatView: View {
                     }
                 }
 
+                if let metadata = heat.sessionMetadata {
+                    card(title: "Session Telemetry") {
+                        VStack(spacing: 8) {
+                            statRow(title: "Source", value: metadata.source)
+                            statRow(title: "Direction", value: metadata.raceDirection.rawValue)
+                            statRow(title: "Duration", value: format(metadata.durationSeconds))
+                            statRow(title: "Samples", value: "\(metadata.sampleCount)")
+                            statRow(title: "Gate Crossings", value: "\(metadata.gateCrossingsCount)")
+                            statRow(title: "Distance", value: String(format: "%.1f m", metadata.totalDistanceMeters))
+                            statRow(title: "Average Speed", value: String(format: "%.2f m/s", metadata.averageSpeedMPS))
+                            statRow(title: "Peak Speed", value: String(format: "%.2f m/s", metadata.peakSpeedMPS))
+                            statRow(title: "Peak Accel", value: String(format: "%.2f g", metadata.peakAccelerationG))
+                            statRow(title: "Peak Decel", value: String(format: "%.2f g", metadata.peakDecelerationG))
+                            statRow(title: "Peak Yaw", value: String(format: "%.2f rad/s", metadata.peakYawRate))
+                        }
+                    }
+                }
+
                 card(title: "Laps") {
                     VStack(spacing: 8) {
                         ForEach(sortedLaps) { lap in

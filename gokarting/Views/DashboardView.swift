@@ -60,8 +60,6 @@ struct DashboardView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    topNavigation
-                    newSessionAction
                     latestSessionSection
                     personalBestsSection
                     recentLapsSection
@@ -91,17 +89,6 @@ struct DashboardView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer()
-
-            Button {} label: {
-                Image(systemName: "person.crop.circle")
-                    .font(.title2)
-                    .foregroundStyle(.primary)
-                    .frame(width: 54, height: 54)
-            }
-            .buttonStyle(.plain)
-            .glassCircleBackground()
         }
     }
 
