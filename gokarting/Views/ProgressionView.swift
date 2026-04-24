@@ -125,85 +125,179 @@ struct ProgressionView: View {
         0...max(heatChartPoints.count + 2, 2)
     }
 
+    private var chartAxisColor: Color {
+        .white.opacity(0.6)
+    }
+
+    private var chartGridColor: Color {
+        .white.opacity(0.12)
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Picker("Source", selection: $selectedSource) {
-                        ForEach(ProgressionSource.allCases) { source in
-                            Text(source.label).tag(source)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    sourceChips
+                    sortChips
+                    filterCard
 
-                    Picker("Sort", selection: $selectedSort) {
-                        ForEach(ProgressionSort.allCases) { sort in
-                            Text(sort.label).tag(sort)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section {
-                    if selectedSource == .timeTrials {
-                        Picker("Combo", selection: $selectedCombo) {
-                            ForEach(availableTimeTrialCombos) { combo in
-                                Text(combo.displayName).tag(combo)
-                            }
-                        }
-                        .pickerStyle(.menu)
+                    if chartData.isEmpty {
+                        emptyStateCard
                     } else {
-                        Picker("Track", selection: $selectedRaceTrack) {
-                            Text("All Tracks").tag(Optional<Track>.none)
-                            ForEach(availableRaceTracks, id: \.self) { track in
-                                Text(track.rawValue).tag(Optional(track))
-                            }
+                        chartCard(
+                            title: selectedSource == .timeTrials ? "Average Lap Over Time" : "Average Best Lap Over Time",
+                            icon: "timer"
+                        ) {
+                            averageLapChart
                         }
-                        .pickerStyle(.menu)
-                    }
-                }
 
-                if chartData.isEmpty {
-                    ContentUnavailableView(
-                        selectedSource == .timeTrials ? "No Sessions" : "No Race Sessions",
-                        systemImage: "chart.line.downtrend.xyaxis",
-                        description: Text(emptyStateDescription)
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    Section {
-                        averageLapChart
-                    } header: {
-                        Text(selectedSource == .timeTrials ? "Average Lap Over Time" : "Average Best Lap Over Time")
-                    }
-
-                    Section {
-                        bestLapChart
-                    } header: {
-                        Text("Best Lap Over Time")
-                    }
-                }
-
-                if !chartData.isEmpty {
-                    Section("Summary") {
-                        LabeledContent(primaryCountLabel, value: "\(chartData.count)")
-                        LabeledContent("Data Points", value: "\(chartData.reduce(0) { $0 + $1.sessionCount })")
-                        if let first = chartData.first, let last = chartData.last, chartData.count >= 2 {
-                            let avgDelta = last.averageLap - first.averageLap
-                            let bestDelta = last.bestLap - first.bestLap
-                            LabeledContent("Avg Lap Change") {
-                                Text(formatDelta(avgDelta))
-                                    .foregroundStyle(avgDelta <= 0 ? .green : .red)
-                            }
-                            LabeledContent("Best Lap Change") {
-                                Text(formatDelta(bestDelta))
-                                    .foregroundStyle(bestDelta <= 0 ? .green : .red)
-                            }
+                        chartCard(title: "Best Lap Over Time", icon: "flag.checkered.2.crossed") {
+                            bestLapChart
                         }
+
+                        summaryCard
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 24)
             }
+            .appScreenBackground()
             .navigationTitle("Progression")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { EmptyView() }
+        }
+    }
+
+    private var sourceChips: some View {
+        HStack(spacing: 10) {
+            selectionChip(title: "Time Trials", icon: "clock", isSelected: selectedSource == .timeTrials) {
+                selectedSource = .timeTrials
+            }
+
+            selectionChip(title: "Races", icon: "flag", isSelected: selectedSource == .races) {
+                selectedSource = .races
+            }
+        }
+    }
+
+    private var sortChips: some View {
+        HStack(spacing: 10) {
+            selectionChip(title: "Date", icon: "calendar", isSelected: selectedSort == .date) {
+                selectedSort = .date
+            }
+
+            selectionChip(title: "Heat", icon: "number", isSelected: selectedSort == .heat) {
+                selectedSort = .heat
+            }
+        }
+    }
+
+    private func selectionChip(
+        title: String,
+        icon: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .glassCapsuleBackground(accented: isSelected)
+    }
+
+    private var filterCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Filters")
+                .font(.headline)
+
+            if selectedSource == .timeTrials {
+                Picker("Track & Kart", selection: $selectedCombo) {
+                    ForEach(availableTimeTrialCombos) { combo in
+                        Text(combo.displayName).tag(combo)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Track", selection: $selectedRaceTrack) {
+                    Text("All Tracks").tag(Optional<Track>.none)
+                    ForEach(availableRaceTracks, id: \.self) { track in
+                        Text(track.rawValue).tag(Optional(track))
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+        .padding(14)
+        .glassCard(radius: 16)
+    }
+
+    private func chartCard<Content: View>(
+        title: String,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+
+            content()
+        }
+        .padding(14)
+        .glassCard(radius: 16)
+    }
+
+    private var emptyStateCard: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "chart.line.downtrend.xyaxis")
+                .font(.title2)
+                .foregroundStyle(.red)
+
+            Text(selectedSource == .timeTrials ? "No Sessions" : "No Race Sessions")
+                .font(.headline)
+
+            Text(emptyStateDescription)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .glassCard(radius: 16)
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Summary")
+                .font(.headline)
+
+            metricRow(title: primaryCountLabel, value: "\(chartData.count)", color: .white)
+            metricRow(title: "Data Points", value: "\(chartData.reduce(0) { $0 + $1.sessionCount })", color: .white)
+
+            if let first = chartData.first, let last = chartData.last, chartData.count >= 2 {
+                let avgDelta = last.averageLap - first.averageLap
+                let bestDelta = last.bestLap - first.bestLap
+                metricRow(title: "Avg Lap Change", value: formatDelta(avgDelta), color: avgDelta <= 0 ? .green : .red)
+                metricRow(title: "Best Lap Change", value: formatDelta(bestDelta), color: bestDelta <= 0 ? .green : .red)
+            }
+        }
+        .padding(14)
+        .glassCard(radius: 16)
+    }
+
+    private func metricRow(title: String, value: String, color: Color) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(color)
         }
     }
 
@@ -216,17 +310,26 @@ struct ProgressionView: View {
                         y: .value("Avg Lap", point.averageLap)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.blue)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(Color(red: 0.31, green: 0.67, blue: 1.0))
 
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value("Avg Lap", point.averageLap)
                     )
-                    .foregroundStyle(.blue)
+                    .symbolSize(42)
+                    .foregroundStyle(Color(red: 0.31, green: 0.67, blue: 1.0))
                     .annotation(position: .top, spacing: 4) {
                         Text(format(point.averageLap))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) {
+                        AxisGridLine().foregroundStyle(chartGridColor)
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                            .foregroundStyle(chartAxisColor)
                     }
                 }
             } else {
@@ -236,29 +339,43 @@ struct ProgressionView: View {
                         y: .value("Avg Lap", chartPoint.point.averageLap)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.blue)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(Color(red: 0.31, green: 0.67, blue: 1.0))
 
                     PointMark(
                         x: .value("Heat", chartPoint.heatIndex),
                         y: .value("Avg Lap", chartPoint.point.averageLap)
                     )
-                    .foregroundStyle(.blue)
+                    .symbolSize(42)
+                    .foregroundStyle(Color(red: 0.31, green: 0.67, blue: 1.0))
                     .annotation(position: .top, spacing: 4) {
                         Text(format(chartPoint.point.averageLap))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.8))
                     }
                 }
                 .chartXScale(domain: heatXDomain)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                        AxisGridLine().foregroundStyle(chartGridColor)
+                        AxisValueLabel {
+                            if let heat = value.as(Int.self) {
+                                Text("H\(heat)")
+                                    .foregroundStyle(chartAxisColor)
+                            }
+                        }
+                    }
+                }
             }
         }
         .chartYScale(domain: .automatic(includesZero: false))
         .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine()
+            AxisMarks(position: .leading) { value in
+                AxisGridLine().foregroundStyle(chartGridColor)
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(format(v))
+                            .foregroundStyle(chartAxisColor)
                     }
                 }
             }
@@ -275,17 +392,26 @@ struct ProgressionView: View {
                         y: .value("Best Lap", point.bestLap)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.orange)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(.red)
 
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value("Best Lap", point.bestLap)
                     )
-                    .foregroundStyle(.orange)
+                    .symbolSize(42)
+                    .foregroundStyle(.red)
                     .annotation(position: .top, spacing: 4) {
                         Text(format(point.bestLap))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) {
+                        AxisGridLine().foregroundStyle(chartGridColor)
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                            .foregroundStyle(chartAxisColor)
                     }
                 }
             } else {
@@ -295,29 +421,43 @@ struct ProgressionView: View {
                         y: .value("Best Lap", chartPoint.point.bestLap)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.orange)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(.red)
 
                     PointMark(
                         x: .value("Heat", chartPoint.heatIndex),
                         y: .value("Best Lap", chartPoint.point.bestLap)
                     )
-                    .foregroundStyle(.orange)
+                    .symbolSize(42)
+                    .foregroundStyle(.red)
                     .annotation(position: .top, spacing: 4) {
                         Text(format(chartPoint.point.bestLap))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.8))
                     }
                 }
                 .chartXScale(domain: heatXDomain)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                        AxisGridLine().foregroundStyle(chartGridColor)
+                        AxisValueLabel {
+                            if let heat = value.as(Int.self) {
+                                Text("H\(heat)")
+                                    .foregroundStyle(chartAxisColor)
+                            }
+                        }
+                    }
+                }
             }
         }
         .chartYScale(domain: .automatic(includesZero: false))
         .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine()
+            AxisMarks(position: .leading) { value in
+                AxisGridLine().foregroundStyle(chartGridColor)
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(format(v))
+                            .foregroundStyle(chartAxisColor)
                     }
                 }
             }

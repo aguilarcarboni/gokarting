@@ -1,59 +1,573 @@
 import SwiftUI
-import Charts
 
-struct TimeTrialView: View {
-    private let sessions = SampleData.standaloneHeats.sorted { $0.date > $1.date }
-    private let raceEvents = SampleData.races
-
+struct SessionsView: View {
+    @State private var selectedMode: SessionsMode = .timeTrials
     @State private var selectedCombo: TrackKartCombo? = nil
     @State private var selectedRange: HistoryRange = .all
 
+    private var timeTrials: [Heat] {
+        SampleData.standaloneHeats
+            .filter { $0.type == .timeTrial }
+            .sorted { $0.date > $1.date }
+    }
+
+    private var raceEvents: [Race] {
+        SampleData.races
+    }
+
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(filteredSessions) { heat in
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Sessions")
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Browse Time Trials or Race sessions.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    modeControls
+                    filterControls
+
+                    if selectedMode == .timeTrials {
+                        timeTrialContent
+                    } else {
+                        raceContent
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+            }
+            .appScreenBackground()
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var modeControls: some View {
+        HStack(spacing: 10) {
+            modeChip(for: .timeTrials)
+            modeChip(for: .races)
+        }
+    }
+
+    private func modeChip(for mode: SessionsMode) -> some View {
+        Button {
+            selectedMode = mode
+        } label: {
+            Label(mode.title, systemImage: mode.icon)
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .foregroundStyle(selectedMode == mode ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .glassCapsuleBackground(accented: selectedMode == mode)
+    }
+
+    private var filterControls: some View {
+        HStack(spacing: 10) {
+            Menu {
+                Picker("Combo", selection: $selectedCombo) {
+                    Text("All Combos").tag(Optional<TrackKartCombo>.none)
+                    ForEach(availableCombos) { combo in
+                        Text(combo.displayName).tag(Optional(combo))
+                    }
+                }
+            } label: {
+                Label(
+                    selectedCombo?.displayName ?? "All Combos",
+                    systemImage: selectedMode == .timeTrials ? "stopwatch" : "flag"
+                )
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassCapsuleBackground(accented: false)
+            }
+
+            Menu {
+                Picker("Range", selection: $selectedRange) {
+                    ForEach(HistoryRange.allCases) { range in
+                        Text(range.label).tag(range)
+                    }
+                }
+            } label: {
+                Label(selectedRange.label, systemImage: "calendar")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .glassCapsuleBackground(accented: false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timeTrialContent: some View {
+        if filteredTimeTrials.isEmpty {
+            ContentUnavailableView(
+                "No Time Trials",
+                systemImage: "stopwatch",
+                description: Text("Try a different range or track/kart combo.")
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(filteredTimeTrials) { heat in
                     NavigationLink {
-                        SessionDetailView(heat: heat)
+                        HeatView(heat: heat)
                     } label: {
-                        SessionRow(heat: heat)
+                        TimeTrialCard(heat: heat)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .navigationTitle("Time Trials")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Picker("Combo", selection: $selectedCombo) {
-                        Text("All Combos").tag(Optional<TrackKartCombo>.none)
-                        ForEach(availableCombos) { combo in
-                            Text(combo.displayName).tag(Optional(combo))
-                        }
+        }
+    }
+
+    @ViewBuilder
+    private var raceContent: some View {
+        if filteredRaces.isEmpty {
+            ContentUnavailableView(
+                "No Races",
+                systemImage: "flag",
+                description: Text("Try a different range or track/kart combo.")
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(filteredRaces) { race in
+                    NavigationLink {
+                        RaceView(race: race)
+                    } label: {
+                        RaceEventCard(race: race)
                     }
-                    .pickerStyle(.menu)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Picker("Range", selection: $selectedRange) {
-                        ForEach(HistoryRange.allCases) { range in
-                            Text(range.label).tag(range)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                    .buttonStyle(.plain)
                 }
             }
-        } detail: {
-            RaceHistoryView(raceEvents: raceEvents)
         }
     }
 
     private var availableCombos: [TrackKartCombo] {
-        let combos = Set(sessions.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        let combos: Set<TrackKartCombo>
+
+        if selectedMode == .timeTrials {
+            combos = Set(timeTrials.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        } else {
+            combos = Set(raceEvents.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        }
+
         return combos.sorted { $0.displayName < $1.displayName }
     }
 
-    private var filteredSessions: [Heat] {
-        sessions.filter { session in
-            let comboMatches = selectedCombo == nil || (session.track == selectedCombo?.track && session.kart == selectedCombo?.kart)
-            let rangeMatches = selectedRange.contains(session.date)
+    private var filteredTimeTrials: [Heat] {
+        timeTrials.filter { heat in
+            let comboMatches = selectedCombo == nil || (heat.track == selectedCombo?.track && heat.kart == selectedCombo?.kart)
+            let rangeMatches = selectedRange.contains(heat.date)
             return comboMatches && rangeMatches
+        }
+    }
+
+    private var filteredRaces: [Race] {
+        raceEvents
+            .filter { race in
+                let comboMatches = selectedCombo == nil || (race.track == selectedCombo?.track && race.kart == selectedCombo?.kart)
+                let rangeMatches = selectedRange.contains(latestRaceDate(for: race) ?? .distantPast)
+                return comboMatches && rangeMatches
+            }
+            .sorted { (latestRaceDate(for: $0) ?? .distantPast) > (latestRaceDate(for: $1) ?? .distantPast) }
+    }
+
+    private func latestRaceDate(for race: Race) -> Date? {
+        race.heats.map(\.date).max()
+    }
+}
+
+struct RaceView: View {
+    let race: Race
+
+    private var sortedHeats: [Heat] {
+        race.heats.sorted(by: { $0.date > $1.date })
+    }
+
+    private var bestLap: TimeInterval? {
+        sortedHeats.compactMap(\.bestLap).min()
+    }
+
+    private var totalLaps: Int {
+        sortedHeats.reduce(0) { $0 + $1.lapCount }
+    }
+
+    private var raceDate: Date? {
+        sortedHeats.map(\.date).max()
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                raceSummaryCard
+
+                if sortedHeats.isEmpty {
+                    ContentUnavailableView(
+                        "No Race Heats",
+                        systemImage: "flag.checkered",
+                        description: Text("This race does not have any heats yet.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Race Heats")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+
+                        LazyVStack(spacing: 12) {
+                            ForEach(sortedHeats) { heat in
+                                NavigationLink {
+                                    HeatView(heat: heat)
+                                } label: {
+                                    RaceHeatCard(heat: heat)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+        }
+        .appScreenBackground()
+        .navigationTitle("Race")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var raceSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "flag.fill")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .glassRoundedBackground(radius: 12)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(race.track.rawValue)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(race.kart.rawValue)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if let raceDate {
+                    Text(raceDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .glassCapsuleBackground(accented: false)
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                raceMetric(title: "Heats", value: "\(sortedHeats.count)", highlight: false)
+                raceMetric(title: "Best", value: format(bestLap), highlight: true)
+                raceMetric(title: "Laps", value: "\(totalLaps)", highlight: false)
+            }
+        }
+        .padding(16)
+        .glassCard()
+    }
+
+    private func raceMetric(title: String, value: String, highlight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color.red : Color.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func format(_ value: TimeInterval?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%.3fs", value)
+    }
+}
+
+private struct TimeTrialCard: View {
+    let heat: Heat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "stopwatch.fill")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .glassRoundedBackground(radius: 12)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(heat.track.rawValue)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(heat.kart.rawValue)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(heat.date.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .glassCapsuleBackground(accented: false)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                metric(title: "Best", value: format(heat.bestLap), highlight: true)
+                metric(title: "Avg", value: format(heat.averageLap), highlight: false)
+                metric(title: "Laps", value: "\(heat.lapCount)", highlight: false)
+            }
+
+            HStack {
+                Text("Open Heat")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassCapsuleBackground(accented: true, tint: .red)
+        }
+        .padding(16)
+        .glassCard()
+    }
+
+    private func metric(title: String, value: String, highlight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color.red : Color.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func format(_ value: TimeInterval?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%.3fs", value)
+    }
+}
+
+private struct RaceEventCard: View {
+    let race: Race
+
+    private var sortedHeats: [Heat] {
+        race.heats.sorted(by: { $0.date > $1.date })
+    }
+
+    private var bestLap: TimeInterval? {
+        sortedHeats.compactMap(\.bestLap).min()
+    }
+
+    private var raceDate: Date? {
+        sortedHeats.map(\.date).max()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "flag.fill")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .glassRoundedBackground(radius: 12)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(race.track.rawValue)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(race.kart.rawValue)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if let raceDate {
+                    Text(raceDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .glassCapsuleBackground(accented: false)
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                raceMetric(title: "Heats", value: "\(sortedHeats.count)", highlight: false)
+                raceMetric(title: "Best", value: format(bestLap), highlight: true)
+                raceMetric(title: "Laps", value: "\(sortedHeats.reduce(0) { $0 + $1.lapCount })", highlight: false)
+            }
+
+            HStack {
+                Text("Open Race")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassCapsuleBackground(accented: true, tint: .red)
+        }
+        .padding(16)
+        .glassCard()
+    }
+
+    private func raceMetric(title: String, value: String, highlight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color.red : Color.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func format(_ value: TimeInterval?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%.3fs", value)
+    }
+}
+
+private struct RaceHeatCard: View {
+    let heat: Heat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: heat.type == .quali ? "clock.badge.checkmark" : "flag.checkered")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .glassRoundedBackground(radius: 12)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(heat.type.label)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(heat.identifier)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Text(heat.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .glassCapsuleBackground(accented: false)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                heatMetric(title: "Best", value: format(heat.bestLap), highlight: true)
+                heatMetric(title: "Avg", value: format(heat.averageLap), highlight: false)
+                heatMetric(title: "Laps", value: "\(heat.lapCount)", highlight: false)
+            }
+
+            HStack {
+                Text("Open Heat")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassCapsuleBackground(accented: true, tint: .red)
+        }
+        .padding(16)
+        .glassCard()
+    }
+
+    private func heatMetric(title: String, value: String, highlight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color.red : Color.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func format(_ value: TimeInterval?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%.3fs", value)
+    }
+}
+
+private enum SessionsMode: String, CaseIterable, Identifiable {
+    case timeTrials
+    case races
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .timeTrials:
+            return "Time Trials"
+        case .races:
+            return "Races"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .timeTrials:
+            return "stopwatch"
+        case .races:
+            return "flag"
         }
     }
 }
@@ -96,287 +610,6 @@ private enum HistoryRange: String, CaseIterable, Identifiable {
     }
 }
 
-struct SessionRow: View {
-    let heat: Heat
-
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text(heat.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.headline)
-
-            Text("\(heat.track.rawValue) • \(heat.kart.rawValue)")
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-
-            HStack {
-                if let best = heat.bestLap {
-                    Label(String(format: "Best: %.2fs", best), systemImage: "stopwatch")
-                }
-                Text("• \(heat.laps.count) Laps")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct SessionDetailView: View {
-    let heat: Heat
-
-    private var sortedLaps: [Lap] {
-        heat.laps.sorted(by: { $0.lapNumber < $1.lapNumber })
-    }
-
-    var body: some View {
-        List {
-            Section {
-                Chart(sortedLaps) { lap in
-                    LineMark(
-                        x: .value("Lap", lap.lapNumber),
-                        y: .value("Time", lap.duration)
-                    )
-                    .interpolationMethod(.catmullRom)
-
-                    PointMark(
-                        x: .value("Lap", lap.lapNumber),
-                        y: .value("Time", lap.duration)
-                    )
-                }
-                .frame(height: 200)
-                .chartYScale(domain: .automatic(includesZero: false))
-            } header: {
-                Text("Lap Progression")
-            }
-
-            Section("Stats") {
-                LabeledContent("Track", value: heat.track.rawValue)
-                LabeledContent("Kart", value: heat.kart.rawValue)
-                LabeledContent("Best Lap", value: format(heat.bestLap))
-                LabeledContent("Avg Lap", value: format(heat.averageLap))
-                LabeledContent("Median Lap", value: format(heat.medianLap))
-                LabeledContent("Consistency (StdDev)", value: format(heat.consistency))
-                LabeledContent("Opening Pace (First 5)", value: format(heat.firstLapsAverage(count: 5)))
-                LabeledContent("Closing Pace (Last 5)", value: format(heat.lastLapsAverage(count: 5)))
-            }
-
-            Section("Laps") {
-                ForEach(sortedLaps) { lap in
-                    HStack {
-                        Text("\(lap.lapNumber)")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 30)
-                        Text(format(lap.duration))
-                            .monospaced()
-                        Spacer()
-                        if lap.duration == heat.bestLap {
-                            Image(systemName: "trophy.fill")
-                                .foregroundStyle(.yellow)
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(heat.identifier)
-    }
-
-    private func format(_ value: TimeInterval?) -> String {
-        guard let value = value else { return "--" }
-        return String(format: "%.3f s", value)
-    }
-
-    private func format(_ value: TimeInterval) -> String {
-        String(format: "%.3f s", value)
-    }
-}
-
-struct RaceHistoryView: View {
-    let raceEvents: [Race]
-
-    var body: some View {
-        NavigationSplitView {
-            List {
-                if raceEvents.isEmpty {
-                    ContentUnavailableView(
-                        "No Race Events",
-                        systemImage: "flag.checkered.2.crossed",
-                        description: Text("No races loaded in SampleData.")
-                    )
-                } else {
-                    ForEach(raceEvents) { race in
-                        NavigationLink {
-                            RaceEventDetailView(race: race)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(race.track.rawValue) • \(race.kart.rawValue)")
-                                    .font(.headline)
-                                Text("\(race.heats.count) heats")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Race History")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        ProgressionView(initialSource: .races)
-                    } label: {
-                        Label("Progression", systemImage: "chart.line.uptrend.xyaxis")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an event")
-        }
-    }
-}
-
-struct RaceEventDetailView: View {
-    let race: Race
-
-    private var sortedHeats: [Heat] {
-        race.heats.sorted(by: { $0.date < $1.date })
-    }
-
-    var body: some View {
-        List {
-            Section("Event") {
-                LabeledContent("Track", value: race.track.rawValue)
-                LabeledContent("Kart", value: race.kart.rawValue)
-                LabeledContent("Heats", value: "\(race.heats.count)")
-            }
-
-            Section("Sessions") {
-                if sortedHeats.isEmpty {
-                    Text("No sessions")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(sortedHeats) { heat in
-                        NavigationLink {
-                            RaceSessionDetailView(heat: heat)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(heat.identifier)
-                                    .font(.headline)
-                                Text(heat.date.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(heat.type.label)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(race.track.rawValue)
-    }
-}
-
-struct RaceSessionDetailView: View {
-    let heat: Heat
-
-    private var sortedResults: [DriverAggregate] {
-        Dictionary(grouping: heat.laps, by: { ($0.competitorID ?? $0.driverNumber ?? $0.driverName ?? "unknown") })
-            .values
-            .compactMap { laps in
-                guard !laps.isEmpty else { return nil }
-                let sorted = laps.sorted(by: { $0.lapNumber < $1.lapNumber })
-                let bestLap = sorted.map(\.duration).min()
-                let total = sorted.reduce(0.0) { $0 + $1.duration }
-                return DriverAggregate(
-                    id: sorted[0].competitorID ?? sorted[0].driverNumber ?? sorted[0].id.uuidString,
-                    driverNumber: sorted[0].driverNumber,
-                    driverName: sorted[0].driverName ?? "Unknown Driver",
-                    lapsCompleted: sorted.count,
-                    bestLapTime: bestLap,
-                    totalTime: total
-                )
-            }
-            .sorted { lhs, rhs in
-                switch (lhs.bestLapTime, rhs.bestLapTime) {
-                case let (l?, r?):
-                    return l < r
-                case (_?, nil):
-                    return true
-                case (nil, _?):
-                    return false
-                case (nil, nil):
-                    return lhs.driverName < rhs.driverName
-                }
-            }
-    }
-
-    var body: some View {
-        List {
-            Section("Session") {
-                LabeledContent("Heat", value: heat.identifier)
-                LabeledContent("Type", value: heat.type.label)
-                LabeledContent("Start", value: heat.date.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("Track", value: heat.track.rawValue)
-                LabeledContent("Kart", value: heat.kart.rawValue)
-                LabeledContent("Best Lap", value: format(heat.bestLap))
-            }
-
-            Section("Results") {
-                if sortedResults.isEmpty {
-                    Text("No results")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(sortedResults.enumerated()), id: \.element.id) { index, result in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("#\(index + 1)")
-                                    .font(.subheadline)
-                                    .bold()
-                                Text(result.displayName)
-                                    .font(.subheadline)
-                                Spacer()
-                                Text(format(result.totalTime))
-                                    .font(.caption)
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                            }
-                            HStack(spacing: 12) {
-                                Text("Best: \(format(result.bestLapTime))")
-                                Text("Laps: \(result.lapsCompleted)")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(heat.identifier)
-    }
-
-    private func format(_ value: TimeInterval?) -> String {
-        guard let value else { return "--" }
-        return String(format: "%.3f s", value)
-    }
-}
-
-private struct DriverAggregate: Identifiable {
-    let id: String
-    let driverNumber: String?
-    let driverName: String
-    let lapsCompleted: Int
-    let bestLapTime: TimeInterval?
-    let totalTime: TimeInterval
-
-    var displayName: String {
-        if let driverNumber, !driverNumber.isEmpty {
-            return "#\(driverNumber) \(driverName)"
-        }
-        return driverName
-    }
-}
-
 #Preview {
-    TimeTrialView()
+    SessionsView()
 }

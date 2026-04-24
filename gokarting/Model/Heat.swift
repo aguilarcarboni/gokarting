@@ -7,6 +7,28 @@ enum HeatType: String, CaseIterable, Codable {
     case practice
 }
 
+struct HeatCompetitor: Identifiable, Hashable {
+    let id: String
+    let competitorID: String?
+    let driverNumber: String?
+    let driverName: String?
+
+    var displayName: String {
+        if let driverName, !driverName.isEmpty {
+            if let driverNumber, !driverNumber.isEmpty {
+                return "#\(driverNumber) \(driverName)"
+            }
+            return driverName
+        }
+
+        if let driverNumber, !driverNumber.isEmpty {
+            return "Driver #\(driverNumber)"
+        }
+
+        return "Unknown Driver"
+    }
+}
+
 struct Heat: Identifiable, Hashable, Codable {
     let id: UUID
     private(set) var identifier: String
@@ -26,6 +48,31 @@ struct Heat: Identifiable, Hashable, Codable {
 
     var lapCount: Int {
         laps.count
+    }
+
+    var competitors: [HeatCompetitor] {
+        if type == .timeTrial {
+            return [HeatCompetitor(id: "you", competitorID: "you", driverNumber: nil, driverName: "You")]
+        }
+
+        var seen = Set<String>()
+        var unique: [HeatCompetitor] = []
+
+        for lap in laps {
+            let key = competitorKey(for: lap)
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            unique.append(
+                HeatCompetitor(
+                    id: key,
+                    competitorID: lap.competitorID,
+                    driverNumber: lap.driverNumber,
+                    driverName: lap.driverName
+                )
+            )
+        }
+
+        return unique
     }
 
     init(
@@ -92,6 +139,42 @@ struct Heat: Identifiable, Hashable, Codable {
             inherited.inheritCombo(track: self.track, kart: self.kart)
             return inherited
         }
+    }
+
+    func laps(for competitor: HeatCompetitor) -> [Lap] {
+        if type == .timeTrial {
+            return laps
+        }
+        return laps.filter { competitorKey(for: $0) == competitor.id }
+    }
+
+    func competitor(for lap: Lap) -> HeatCompetitor {
+        if type == .timeTrial {
+            return HeatCompetitor(id: "you", competitorID: "you", driverNumber: nil, driverName: "You")
+        }
+        return HeatCompetitor(
+            id: competitorKey(for: lap),
+            competitorID: lap.competitorID,
+            driverNumber: lap.driverNumber,
+            driverName: lap.driverName
+        )
+    }
+
+    private func competitorKey(for lap: Lap) -> String {
+        if type == .timeTrial {
+            return "you"
+        }
+
+        if let competitorID = lap.competitorID, !competitorID.isEmpty {
+            return "id:\(competitorID)"
+        }
+        if let driverNumber = lap.driverNumber, !driverNumber.isEmpty {
+            return "num:\(driverNumber)"
+        }
+        if let driverName = lap.driverName, !driverName.isEmpty {
+            return "name:\(driverName)"
+        }
+        return "unknown"
     }
 
     private static func normalizeLaps(_ laps: [Lap], track: Track, kart: Kart) -> [Lap] {

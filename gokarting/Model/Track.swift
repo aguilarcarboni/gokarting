@@ -6,6 +6,7 @@ enum Track: String, CaseIterable, Codable {
     case p1Speedway = "P1 Speedway (Medium)"
     case p1ShortConfig = "P1 Speedway (Short)"
     case p1SpeedwayInverse = "P1 Speedway (Inverse)"
+    case test = "test"
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -21,6 +22,8 @@ enum Track: String, CaseIterable, Codable {
             self = .fik
         case Track.formulaKart.rawValue:
             self = .formulaKart
+        case Track.test.rawValue:
+            self = .test
         default:
             throw DecodingError.dataCorruptedError(
                 in: container,
@@ -86,6 +89,11 @@ extension Track {
                 pointA: GeoCoordinate(latitude: 9.92237, longitude: -84.03611),
                 pointB: GeoCoordinate(latitude: 9.92233, longitude: -84.03616)
             )
+        case .test:
+            return (
+                pointA: GeoCoordinate(latitude: 9.93727, longitude: -84.19439),
+                pointB: GeoCoordinate(latitude: 9.93722, longitude: -84.19447)
+            )
         }
     }
 
@@ -101,6 +109,8 @@ extension Track {
             return [.sodiRental]
         case .p1SpeedwayInverse:
             return [.sodiRental, .tillotsonT4]
+        case .test:
+            return [.sodiRental]
         }
     }
 

@@ -56,14 +56,6 @@ enum RaceDirection: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
-enum PhoneMountOrientation: String, CaseIterable, Identifiable, Codable {
-    case portrait = "Portrait"
-    case landscapeLeft = "Landscape Left"
-    case landscapeRight = "Landscape Right"
-
-    var id: String { rawValue }
-}
-
 struct StartFinishGate: Hashable, Codable {
     var pointA: GeoCoordinate
     var pointB: GeoCoordinate
@@ -97,7 +89,6 @@ struct StartFinishGate: Hashable, Codable {
 struct RecordingConfig: Hashable, Codable {
     var track: Track
     var raceDirection: RaceDirection
-    var phoneMountOrientation: PhoneMountOrientation
     var gate: StartFinishGate
     var cooldownSeconds: TimeInterval
     var minimumLapDurationSeconds: TimeInterval
