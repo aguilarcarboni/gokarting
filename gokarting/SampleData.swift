@@ -379,6 +379,78 @@ enum SampleData {
             ],
             date: calendar.date(from: DateComponents(year: 2026, month: 3, day: 17, hour: 20, minute: 30)) ?? Date.distantPast
         ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-59",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                24.613, 24.025, 24.415, 24.016, 24.192,
+                23.913, 26.145, 23.486, 23.841, 23.336,
+                23.446, 26.032, 24.104, 23.352, 23.386,
+                23.219, 26.034
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 17, minute: 40)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-60",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                23.518, 23.268, 23.574, 23.361, 23.208,
+                23.404, 23.275, 23.627, 23.533, 23.499,
+                23.371, 23.585, 23.509, 23.688, 23.561,
+                23.309, 23.760
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 17, minute: 50)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-63",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                23.724, 24.013, 24.371, 24.236, 24.869,
+                23.699, 23.798, 23.715, 23.948, 23.771,
+                23.430, 23.357, 23.461, 23.439, 23.686,
+                23.295, 23.422
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 18, minute: 20)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-64",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                23.290, 23.607, 23.410, 23.816, 23.584,
+                23.251, 23.398, 23.800, 24.024, 23.847,
+                23.722, 23.813, 23.244, 23.507, 23.317,
+                23.392, 23.976
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 18, minute: 30)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-67",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                24.580, 25.495, 23.930, 23.936, 24.033,
+                23.688, 23.925, 23.506, 23.731, 23.667,
+                23.793, 23.676, 23.518, 23.552, 23.659,
+                23.549, 24.632
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 19, minute: 0)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "formulakart-2026-05-05-heat-68",
+            track: .formulaKart,
+            kart: .fkKart,
+            lapDurations: [
+                24.632, 23.943, 23.685, 23.613, 23.457,
+                23.391, 23.612, 23.335, 23.618, 23.905,
+                23.586, 23.587, 23.644, 23.720, 23.733,
+                23.632, 23.570
+            ],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 5, hour: 19, minute: 10)) ?? Date.distantPast
+        ),
 
         Heat(
             identifier: "p1speedway-2026-02-08-heat-1",
