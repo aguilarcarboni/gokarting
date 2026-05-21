@@ -498,25 +498,25 @@ enum SampleData {
 
     static let races: [Race] = [
         Race(
-            track: .p1Speedway,
+            track: .p1ShortConfig,
             kart: .sodiRental,
             heats: [
                 Heat(
                     identifier: "E82E774B72637180-2147484742-1073749963",
                     type: .quali,
                     carNumber: "14",
-                    track: .p1Speedway,
+                    track: .p1ShortConfig,
                     kart: .sodiRental,
-                    laps: qualifierLaps(track: .p1Speedway, kart: .sodiRental, date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 18, minute: 30)) ?? Date.distantPast),
+                    laps: qualifierLaps(track: .p1ShortConfig, kart: .sodiRental, date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 18, minute: 30)) ?? Date.distantPast),
                     date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 18, minute: 30)) ?? Date.distantPast
                 ),
                 Heat(
                     identifier: "E82E774B72637180-2147484742-1073749966",
                     type: .race,
                     carNumber: "08",
-                    track: .p1Speedway,
+                    track: .p1ShortConfig,
                     kart: .sodiRental,
-                    laps: raceLaps(track: .p1Speedway, kart: .sodiRental, date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 19, minute: 20)) ?? Date.distantPast),
+                    laps: raceLaps(track: .p1ShortConfig, kart: .sodiRental, date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 19, minute: 20)) ?? Date.distantPast),
                     date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 11, hour: 19, minute: 20)) ?? Date.distantPast
                 )
             ]

@@ -11,9 +11,23 @@ struct LiveTimingView: View {
     @State private var selectedLapNumber: Int?
     @State private var showLiveLaps = false
     @State private var debugPreviewHeat: Heat?
+    private let preferredTrack: Track = .p1ShortConfig
+
+    private var orderedTracks: [Track] {
+        var tracks = Track.allCases
+        if let index = tracks.firstIndex(of: preferredTrack) {
+            tracks.remove(at: index)
+            tracks.insert(preferredTrack, at: 0)
+        }
+        return tracks
+    }
 
     private var gatePolyline: [CLLocationCoordinate2D] {
         [viewModel.currentGate.pointA.clCoordinate, viewModel.currentGate.pointB.clCoordinate]
+    }
+
+    private var trackLayoutPolyline: [CLLocationCoordinate2D] {
+        viewModel.selectedTrack.layout?.centerline.map(\.clCoordinate) ?? []
     }
 
     private var gateDirectionArrowShaft: [CLLocationCoordinate2D] {
@@ -69,19 +83,19 @@ struct LiveTimingView: View {
             .toolbar(viewModel.phase == .live ? .hidden : .visible, for: .navigationBar)
             .onAppear {
                 viewModel.requestPermissions()
-                setupCameraPosition = .region(mapRegion(for: viewModel.currentGate))
-                summaryCameraPosition = .region(mapRegion(for: viewModel.currentGate))
+                setupCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
+                summaryCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
                 updateOrientation(for: viewModel.phase)
             }
             .onChange(of: viewModel.selectedTrack) { _, _ in
-                setupCameraPosition = .region(mapRegion(for: viewModel.currentGate))
+                setupCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
                 if viewModel.phase == .summary {
-                    summaryCameraPosition = .region(mapRegion(for: viewModel.currentGate))
+                    summaryCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
                 }
             }
             .onChange(of: viewModel.phase) { _, newPhase in
                 if newPhase == .live || newPhase == .summary {
-                    summaryCameraPosition = .region(mapRegion(for: viewModel.currentGate))
+                    summaryCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
                 }
                 if newPhase != .live {
                     showLiveLaps = false
@@ -142,9 +156,16 @@ struct LiveTimingView: View {
                     Text("Session Configuration")
                         .font(.headline)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Picker("Session Type", selection: $viewModel.sessionType) {
+                        ForEach(HeatType.allCases, id: \.self) { type in
+                            Text(type.label).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
 
                     Picker("Track", selection: $viewModel.selectedTrack) {
-                        ForEach(Track.allCases, id: \.self) { track in
+                        ForEach(orderedTracks, id: \.self) { track in
                             Text(track.rawValue).tag(track)
                         }
                     }
@@ -157,12 +178,12 @@ struct LiveTimingView: View {
                     }
                     .pickerStyle(.menu)
 
-                    Picker("Session Type", selection: $viewModel.sessionType) {
-                        ForEach(HeatType.allCases, id: \.self) { type in
-                            Text(type.label).tag(type)
+                    Picker("Phone Mount", selection: $viewModel.phoneMountOrientation) {
+                        ForEach(PhoneMountOrientation.allCases, id: \.self) { orientation in
+                            Text(orientation.rawValue).tag(orientation)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                 }
             }
 
@@ -172,6 +193,10 @@ struct LiveTimingView: View {
                         .font(.headline)
 
                     Map(position: $setupCameraPosition, interactionModes: [.zoom, .pan]) {
+                        if !trackLayoutPolyline.isEmpty {
+                            MapPolyline(coordinates: trackLayoutPolyline)
+                                .stroke(.cyan, lineWidth: 4)
+                        }
                         MapPolyline(coordinates: gatePolyline)
                             .stroke(.red, lineWidth: 5)
                         MapPolyline(coordinates: gateDirectionArrowShaft)
@@ -343,6 +368,11 @@ struct LiveTimingView: View {
                         .font(.headline)
 
                     Map(position: $summaryCameraPosition, interactionModes: [.zoom, .pan]) {
+                        if !trackLayoutPolyline.isEmpty {
+                            MapPolyline(coordinates: trackLayoutPolyline)
+                                .stroke(.white.opacity(0.9), lineWidth: 3)
+                        }
+
                         if !routePolyline.isEmpty {
                             MapPolyline(coordinates: routePolyline)
                                 .stroke(.cyan, lineWidth: 4)
@@ -354,6 +384,12 @@ struct LiveTimingView: View {
                     .mapStyle(.imagery(elevation: .realistic))
                     .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                    if trackLayoutPolyline.isEmpty {
+                        Text("This track currently uses gate-only mode (no saved layout yet).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -679,10 +715,49 @@ struct LiveTimingView: View {
         String(format: "%.2f m/s", speed)
     }
 
-    private func mapRegion(for gate: StartFinishGate) -> MKCoordinateRegion {
-        MKCoordinateRegion(
+    private func mapRegion(for track: Track, gate: StartFinishGate) -> MKCoordinateRegion {
+        if let layout = track.layout, !layout.centerline.isEmpty {
+            return regionFitting(layout.centerline.map(\.clCoordinate))
+        }
+        
+        return MKCoordinateRegion(
             center: gate.center.clCoordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
+        )
+    }
+
+    private func regionFitting(_ coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
+        guard let first = coordinates.first else {
+            return MKCoordinateRegion(
+                center: viewModel.currentGate.center.clCoordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
+            )
+        }
+
+        var minLat = first.latitude
+        var maxLat = first.latitude
+        var minLon = first.longitude
+        var maxLon = first.longitude
+
+        for coordinate in coordinates.dropFirst() {
+            minLat = min(minLat, coordinate.latitude)
+            maxLat = max(maxLat, coordinate.latitude)
+            minLon = min(minLon, coordinate.longitude)
+            maxLon = max(maxLon, coordinate.longitude)
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2.0,
+            longitude: (minLon + maxLon) / 2.0
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.25, 0.0008),
+            longitudeDelta: max((maxLon - minLon) * 1.25, 0.0008)
+        )
+
+        return MKCoordinateRegion(
+            center: center,
+            span: span
         )
     }
 

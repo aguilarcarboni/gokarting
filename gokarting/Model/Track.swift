@@ -1,5 +1,10 @@
 import Foundation
 
+struct TrackLayout: Hashable, Codable {
+    let centerline: [GeoCoordinate]
+    let trackWidthMeters: Double?
+}
+
 enum Track: String, CaseIterable, Codable {
     case fik = "FIK"
     case formulaKart = "Formula Kart"
@@ -62,6 +67,46 @@ struct TrackKartCombo: Hashable, Identifiable {
 }
 
 extension Track {
+    var layout: TrackLayout? {
+        switch self {
+        case .p1ShortConfig:
+            return TrackLayout(centerline: [
+                GeoCoordinate(latitude: 9.961686499999999, longitude: -84.134333),
+                GeoCoordinate(latitude: 9.961273846631125, longitude: -84.13460323064015),
+                GeoCoordinate(latitude: 9.961257871405623, longitude: -84.13466424775481),
+                GeoCoordinate(latitude: 9.961263957205892, longitude: -84.13471831355261),
+                GeoCoordinate(latitude: 9.96128449678098, longitude: -84.13473993987166),
+                GeoCoordinate(latitude: 9.961331661726309, longitude: -84.13476620040204),
+                GeoCoordinate(latitude: 9.961405452030252, longitude: -84.13475538724246),
+                GeoCoordinate(latitude: 9.961518799990493, longitude: -84.13466193064917),
+                GeoCoordinate(latitude: 9.96165116601496, longitude: -84.13455379905362),
+                GeoCoordinate(latitude: 9.961829936135175, longitude: -84.1344116832423),
+                GeoCoordinate(latitude: 9.961860987238694, longitude: -84.13440665578933),
+                GeoCoordinate(latitude: 9.96192126766667, longitude: -84.13441905137141),
+                GeoCoordinate(latitude: 9.961938817662578, longitude: -84.13445081505041),
+                GeoCoordinate(latitude: 9.961915926363375, longitude: -84.13450736989351),
+                GeoCoordinate(latitude: 9.9617029295374, longitude: -84.13475217041744),
+                GeoCoordinate(latitude: 9.961730742674963, longitude: -84.13481178582938),
+                GeoCoordinate(latitude: 9.96222734465435, longitude: -84.1349127236112),
+                GeoCoordinate(latitude: 9.962276855354364, longitude: -84.1349080834278),
+                GeoCoordinate(latitude: 9.9625495275737, longitude: -84.13392981197495),
+                GeoCoordinate(latitude: 9.96249427549866, longitude: -84.13385851666716),
+                GeoCoordinate(latitude: 9.962376421980853, longitude: -84.13383009794178),
+                GeoCoordinate(latitude: 9.962290241568967, longitude: -84.13389142255969),
+                GeoCoordinate(latitude: 9.962285169482909, longitude: -84.13401542360147),
+                GeoCoordinate(latitude: 9.962304623097612, longitude: -84.134180116503),
+                GeoCoordinate(latitude: 9.96214523616743, longitude: -84.13471155096482),
+                GeoCoordinate(latitude: 9.96210113185192, longitude: -84.13474838980919),
+                GeoCoordinate(latitude: 9.96205670413649, longitude: -84.13468770408488),
+                GeoCoordinate(latitude: 9.962139744110704, longitude: -84.13412937443914),
+                GeoCoordinate(latitude: 9.962077911264522, longitude: -84.13407569002466),
+                GeoCoordinate(latitude: 9.961695877372511, longitude: -84.13432061134361)
+            ], trackWidthMeters: 7.0)
+        case .fik, .formulaKart, .p1Speedway, .p1SpeedwayInverse, .test:
+            return nil
+        }
+    }
+
     var gatePoints: (pointA: GeoCoordinate, pointB: GeoCoordinate) {
         switch self {
         case .p1Speedway:

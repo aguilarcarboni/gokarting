@@ -56,6 +56,14 @@ enum RaceDirection: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+enum PhoneMountOrientation: String, CaseIterable, Identifiable, Codable {
+    case landscapeLeft = "Landscape Left"
+    case landscapeRight = "Landscape Right"
+    case portrait = "Portrait"
+
+    var id: String { rawValue }
+}
+
 struct StartFinishGate: Hashable, Codable {
     var pointA: GeoCoordinate
     var pointB: GeoCoordinate
@@ -107,6 +115,19 @@ struct TelemetrySample: Hashable {
     let accelerationY: Double?
     let accelerationZ: Double?
     let yawRate: Double?
+}
+
+struct MotionTelemetrySample: Hashable {
+    let timestamp: Date
+    let accelerationX: Double
+    let accelerationY: Double
+    let accelerationZ: Double
+    let yawRate: Double
+    let latitude: Double?
+    let longitude: Double?
+    let speedMPS: Double?
+    let courseDegrees: Double?
+    let horizontalAccuracyMeters: Double?
 }
 
 struct LapTelemetrySummary: Hashable {

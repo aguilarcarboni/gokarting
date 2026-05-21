@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Charts
 
 struct LapView: View {
     let lap: Lap
@@ -22,6 +23,10 @@ struct LapView: View {
 
     private var lapPolyline: [CLLocationCoordinate2D] {
         sanitizedLapRoute.map(\.clCoordinate)
+    }
+
+    private var trackLayoutPolyline: [CLLocationCoordinate2D] {
+        lap.track.layout?.centerline.map(\.clCoordinate) ?? []
     }
 
     private var sanitizedLapRoute: [GeoCoordinate] {
@@ -51,6 +56,45 @@ struct LapView: View {
         lapPolyline.last
     }
 
+    private struct TelemetryPoint: Identifiable {
+        let id = UUID()
+        let t: Double
+        let value: Double
+    }
+
+    private var lapMotionSamples: [LapMotionSample] {
+        lap.motionSamples ?? []
+    }
+
+    private var speedSeries: [TelemetryPoint] {
+        guard let start = lapMotionSamples.first?.timestamp else { return [] }
+        return lapMotionSamples.compactMap { sample in
+            guard let speed = sample.speedMPS else { return nil }
+            return TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: speed)
+        }
+    }
+
+    private var longitudinalAccelSeries: [TelemetryPoint] {
+        guard let start = lapMotionSamples.first?.timestamp else { return [] }
+        return lapMotionSamples.map { sample in
+            TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.accelerationX)
+        }
+    }
+
+    private var lateralAccelSeries: [TelemetryPoint] {
+        guard let start = lapMotionSamples.first?.timestamp else { return [] }
+        return lapMotionSamples.map { sample in
+            TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.accelerationY)
+        }
+    }
+
+    private var yawSeries: [TelemetryPoint] {
+        guard let start = lapMotionSamples.first?.timestamp else { return [] }
+        return lapMotionSamples.map { sample in
+            TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.yawRate)
+        }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
@@ -73,12 +117,21 @@ struct LapView: View {
                         statRow(title: "Track", value: lap.track.rawValue)
                         statRow(title: "Kart", value: lap.kart.rawValue)
                         statRow(title: "Total Laps", value: "\(heat.laps(for: lapCompetitor).count)")
+                        statRow(title: "Layout Points", value: "\(trackLayoutPolyline.count)")
+                        if let width = lap.track.layout?.trackWidthMeters {
+                            statRow(title: "Track Width", value: String(format: "%.1f m", width))
+                        }
                     }
                 }
 
                 card(title: "Lap Line") {
                     if lapPolyline.count > 1 {
                         Map(position: $lapCameraPosition, interactionModes: [.zoom, .pan]) {
+                            if !trackLayoutPolyline.isEmpty {
+                                MapPolyline(coordinates: trackLayoutPolyline)
+                                    .stroke(.white.opacity(0.9), lineWidth: 3)
+                            }
+
                             MapPolyline(coordinates: lapPolyline)
                                 .stroke(.cyan, lineWidth: 4)
 
@@ -105,8 +158,62 @@ struct LapView: View {
                     }
                 }
 
+                if !lapMotionSamples.isEmpty {
+                    card(title: "Telemetry Graphs") {
+                        VStack(spacing: 12) {
+                            if !speedSeries.isEmpty {
+                                chartCard(title: "Speed (m/s)") {
+                                    Chart(speedSeries) { point in
+                                        LineMark(
+                                            x: .value("t", point.t),
+                                            y: .value("Speed", point.value)
+                                        )
+                                        .foregroundStyle(.green)
+                                        .interpolationMethod(.catmullRom)
+                                    }
+                                    .frame(height: 150)
+                                }
+                            }
+
+                            chartCard(title: "Acceleration (g)") {
+                                Chart {
+                                    ForEach(longitudinalAccelSeries) { point in
+                                        LineMark(
+                                            x: .value("t", point.t),
+                                            y: .value("Longitudinal", point.value)
+                                        )
+                                        .foregroundStyle(.red)
+                                        .interpolationMethod(.catmullRom)
+                                    }
+                                    ForEach(lateralAccelSeries) { point in
+                                        LineMark(
+                                            x: .value("t", point.t),
+                                            y: .value("Lateral", point.value)
+                                        )
+                                        .foregroundStyle(.blue)
+                                        .interpolationMethod(.catmullRom)
+                                    }
+                                }
+                                .frame(height: 150)
+                            }
+
+                            chartCard(title: "Yaw Rate (rad/s)") {
+                                Chart(yawSeries) { point in
+                                    LineMark(
+                                        x: .value("t", point.t),
+                                        y: .value("Yaw", point.value)
+                                    )
+                                    .foregroundStyle(.orange)
+                                    .interpolationMethod(.catmullRom)
+                                }
+                                .frame(height: 130)
+                            }
+                        }
+                    }
+                }
+
                 if lap.telemetry != nil || lap.speedAtCrossingMPS != nil || lap.crossedAt != nil {
-                    card(title: "Telemetry") {
+                    card(title: "Motion Telemetry") {
                         VStack(spacing: 8) {
                             if let crossedAt = lap.crossedAt {
                                 statRow(title: "Crossed At", value: crossedAt.formatted(date: .abbreviated, time: .shortened))
@@ -121,7 +228,7 @@ struct LapView: View {
                                 statRow(title: "Avg Speed", value: String(format: "%.2f m/s", telemetry.averageSpeedMPS))
                                 statRow(title: "Peak Speed", value: String(format: "%.2f m/s", telemetry.peakSpeedMPS))
                                 statRow(title: "Distance", value: String(format: "%.1f m", telemetry.distanceMeters))
-                                statRow(title: "Samples", value: "\(telemetry.sampleCount)")
+                                statRow(title: "Motion Samples", value: "\(telemetry.sampleCount)")
                             }
                         }
                     }
@@ -229,6 +336,18 @@ struct LapView: View {
                 .foregroundStyle(highlight ? Color.red : Color.white)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chartCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .glassRoundedBackground(radius: 10)
     }
 
     private func format(_ value: TimeInterval?) -> String {

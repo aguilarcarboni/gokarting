@@ -4,6 +4,7 @@ import Charts
 struct ProgressionView: View {
     private let standaloneHeats = SampleData.standaloneHeats
     private let races = SampleData.races
+    private let preferredCombo = TrackKartCombo(track: .formulaKart, kart: .fkKart)
 
     @State private var selectedSource: ProgressionSource
     @State private var selectedSort: ProgressionSort = .date
@@ -11,16 +12,23 @@ struct ProgressionView: View {
     @State private var selectedRaceTrack: Track? = nil
 
     init(initialSource: ProgressionSource = .timeTrials) {
-        let defaultCombo = SampleData.standaloneHeats.first.map { TrackKartCombo(track: $0.track, kart: $0.kart) }
+        let fallbackCombo = SampleData.standaloneHeats.first.map { TrackKartCombo(track: $0.track, kart: $0.kart) }
             ?? TrackKartCombo.allCases.first
             ?? TrackKartCombo(track: .fik, kart: .fikKart)
+        let defaultCombo = TrackKartCombo(track: .formulaKart, kart: .fkKart)
         _selectedSource = State(initialValue: initialSource)
-        _selectedCombo = State(initialValue: defaultCombo)
+        _selectedCombo = State(initialValue: TrackKartCombo.allCases.contains(defaultCombo) ? defaultCombo : fallbackCombo)
     }
 
     private var availableTimeTrialCombos: [TrackKartCombo] {
-        let combos = Set(standaloneHeats.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
-        return combos.sorted { $0.displayName < $1.displayName }
+        var availableCombos = Set(standaloneHeats.map { TrackKartCombo(track: $0.track, kart: $0.kart) })
+        availableCombos.insert(preferredCombo)
+        var ordered = availableCombos.sorted { $0.displayName < $1.displayName }
+        if let preferredIndex = ordered.firstIndex(of: preferredCombo) {
+            ordered.remove(at: preferredIndex)
+            ordered.insert(preferredCombo, at: 0)
+        }
+        return ordered
     }
 
     private var raceHeats: [Heat] {

@@ -17,6 +17,7 @@ final class SensorRecorder: NSObject, ObservableObject {
     @Published private(set) var lastLocationError: String?
 
     var onSample: ((TelemetrySample) -> Void)?
+    var onMotionSample: ((MotionTelemetrySample) -> Void)?
 
     private let locationManager = CLLocationManager()
     private let motionManager = CMMotionManager()
@@ -29,11 +30,19 @@ final class SensorRecorder: NSObject, ObservableObject {
 
     private var latestAcceleration: (x: Double, y: Double, z: Double)?
     private var latestYawRate: Double?
+    private var latestLocationSnapshot: LocationSnapshot?
     private var lastAccelerometerLogAt: Date?
     private var lastGyroLogAt: Date?
     private var lastLocationLogAt: Date?
     private let motionLogIntervalSeconds: TimeInterval = 1.0
     private let locationLogIntervalSeconds: TimeInterval = 0.25
+
+    private struct LocationSnapshot {
+        let coordinate: CLLocationCoordinate2D
+        let speedMPS: Double
+        let courseDegrees: Double?
+        let horizontalAccuracyMeters: Double
+    }
 
     override init() {
         super.init()
@@ -68,11 +77,36 @@ final class SensorRecorder: NSObject, ObservableObject {
         locationManager.stopUpdatingHeading()
         motionManager.stopAccelerometerUpdates()
         motionManager.stopGyroUpdates()
+        motionManager.stopDeviceMotionUpdates()
     }
 
     private func startMotionUpdatesIfAvailable() {
-        if motionManager.isAccelerometerAvailable {
+        if motionManager.isDeviceMotionAvailable {
+            motionManager.deviceMotionUpdateInterval = 1.0 / 20.0
+            motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] update, _ in
+                guard let data = update else { return }
+                Task { @MainActor in
+                    guard let self else { return }
+                    let now = Date()
+                    self.latestAcceleration = (
+                        x: data.userAcceleration.x,
+                        y: data.userAcceleration.y,
+                        z: data.userAcceleration.z
+                    )
+                    self.latestYawRate = data.rotationRate.z
+                    self.lastAccelerometerTimestamp = now
+                    self.lastGyroTimestamp = now
+                    self.logAccelerometerIfNeeded(data.userAcceleration, at: now)
+                    self.logGyroIfNeeded(data.rotationRate, at: now)
+                    self.emitMotionSample(at: now)
+                }
+            }
+            return
+        }
+
+        if motionManager.isAccelerometerAvailable && motionManager.isGyroAvailable {
             motionManager.accelerometerUpdateInterval = 1.0 / 20.0
+            motionManager.gyroUpdateInterval = 1.0 / 20.0
             motionManager.startAccelerometerUpdates(to: motionQueue) { [weak self] update, _ in
                 guard let data = update?.acceleration else { return }
                 Task { @MainActor in
@@ -81,12 +115,9 @@ final class SensorRecorder: NSObject, ObservableObject {
                     let now = Date()
                     self.lastAccelerometerTimestamp = now
                     self.logAccelerometerIfNeeded(data, at: now)
+                    self.emitMotionSample(at: now)
                 }
             }
-        }
-
-        if motionManager.isGyroAvailable {
-            motionManager.gyroUpdateInterval = 1.0 / 20.0
             motionManager.startGyroUpdates(to: motionQueue) { [weak self] update, _ in
                 guard let data = update?.rotationRate else { return }
                 Task { @MainActor in
@@ -95,9 +126,28 @@ final class SensorRecorder: NSObject, ObservableObject {
                     self.latestYawRate = data.z
                     self.lastGyroTimestamp = now
                     self.logGyroIfNeeded(data, at: now)
+                    self.emitMotionSample(at: now)
                 }
             }
         }
+    }
+
+    private func emitMotionSample(at timestamp: Date) {
+        guard let acceleration = latestAcceleration, let yawRate = latestYawRate else { return }
+        let snapshot = latestLocationSnapshot
+        let sample = MotionTelemetrySample(
+            timestamp: timestamp,
+            accelerationX: acceleration.x,
+            accelerationY: acceleration.y,
+            accelerationZ: acceleration.z,
+            yawRate: yawRate,
+            latitude: snapshot?.coordinate.latitude,
+            longitude: snapshot?.coordinate.longitude,
+            speedMPS: snapshot?.speedMPS,
+            courseDegrees: snapshot?.courseDegrees,
+            horizontalAccuracyMeters: snapshot?.horizontalAccuracyMeters
+        )
+        onMotionSample?(sample)
     }
 
     private func logAccelerometerIfNeeded(_ acceleration: CMAcceleration, at now: Date) {
@@ -178,6 +228,12 @@ extension SensorRecorder: CLLocationManagerDelegate {
             )
 
             latestSample = sample
+            latestLocationSnapshot = LocationSnapshot(
+                coordinate: location.coordinate,
+                speedMPS: speed,
+                courseDegrees: course,
+                horizontalAccuracyMeters: location.horizontalAccuracy
+            )
             lastLocationTimestamp = location.timestamp
             lastLocationError = nil
             onSample?(sample)

@@ -10,6 +10,17 @@ struct LapTelemetry: Hashable, Codable {
     let sampleCount: Int
 }
 
+struct LapMotionSample: Hashable, Codable {
+    let timestamp: Date
+    let accelerationX: Double
+    let accelerationY: Double
+    let accelerationZ: Double
+    let yawRate: Double
+    let speedMPS: Double?
+    let latitude: Double?
+    let longitude: Double?
+}
+
 struct Lap: Identifiable, Hashable, Codable {
     let id: UUID
     private(set) var track: Track
@@ -24,6 +35,7 @@ struct Lap: Identifiable, Hashable, Codable {
     let speedAtCrossingMPS: Double?
     let telemetry: LapTelemetry?
     let route: [GeoCoordinate]
+    let motionSamples: [LapMotionSample]?
 
     init(
         id: UUID = UUID(),
@@ -38,7 +50,8 @@ struct Lap: Identifiable, Hashable, Codable {
         crossedAt: Date? = nil,
         speedAtCrossingMPS: Double? = nil,
         telemetry: LapTelemetry? = nil,
-        route: [GeoCoordinate] = []
+        route: [GeoCoordinate] = [],
+        motionSamples: [LapMotionSample]? = nil
     ) {
         self.id = id
         self.track = track
@@ -53,6 +66,7 @@ struct Lap: Identifiable, Hashable, Codable {
         self.speedAtCrossingMPS = speedAtCrossingMPS
         self.telemetry = telemetry
         self.route = route
+        self.motionSamples = motionSamples
     }
 
     mutating func inheritCombo(track: Track, kart: Kart) {

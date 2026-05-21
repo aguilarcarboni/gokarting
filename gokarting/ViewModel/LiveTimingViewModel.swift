@@ -14,13 +14,13 @@ final class LiveTimingViewModel: ObservableObject {
     }
 
     @Published private(set) var phase: SessionPhase = .setup
-    @Published var selectedTrack: Track = .p1Speedway {
+    @Published var selectedTrack: Track = .p1ShortConfig {
         didSet {
             normalizeKartForTrack()
             normalizeRaceDirectionForTrack()
         }
     }
-    @Published var selectedKart: Kart = Track.p1Speedway.defaultKart
+    @Published var selectedKart: Kart = .sodiRental
     @Published var sessionType: HeatType = .timeTrial
     @Published var sessionIdentifier: String = ""
     @Published var carNumber: String = ""
@@ -28,6 +28,7 @@ final class LiveTimingViewModel: ObservableObject {
     @Published var driverName: String = ""
     @Published var driverNumber: String = ""
     @Published var raceDirection: RaceDirection = .clockwise
+    @Published var phoneMountOrientation: PhoneMountOrientation = .landscapeLeft
 
     @Published var cooldownSeconds: Double = 5
     @Published var minimumLapDurationSeconds: Double = 20
@@ -48,6 +49,7 @@ final class LiveTimingViewModel: ObservableObject {
     private let sensorRecorder = SensorRecorder()
     private var detector: LapDetectionEngine?
     private var sessionSamples: [TelemetrySample] = []
+    private var motionSamples: [MotionTelemetrySample] = []
     private var sessionStartedAt: Date?
     private var sessionEndedAt: Date?
 
@@ -56,6 +58,9 @@ final class LiveTimingViewModel: ObservableObject {
         normalizeRaceDirectionForTrack()
         sensorRecorder.onSample = { [weak self] sample in
             self?.handle(sample: sample)
+        }
+        sensorRecorder.onMotionSample = { [weak self] sample in
+            self?.handle(motionSample: sample)
         }
     }
 
@@ -94,6 +99,7 @@ final class LiveTimingViewModel: ObservableObject {
         route.removeAll()
         latestSample = nil
         sessionSamples.removeAll()
+        motionSamples.removeAll()
         sessionStartedAt = Date()
         sessionEndedAt = nil
         exportStatus = nil
@@ -125,6 +131,7 @@ final class LiveTimingViewModel: ObservableObject {
         route.removeAll()
         latestSample = nil
         sessionSamples.removeAll()
+        motionSamples.removeAll()
         sessionStartedAt = nil
         sessionEndedAt = nil
         exportStatus = nil
@@ -205,6 +212,11 @@ final class LiveTimingViewModel: ObservableObject {
         route = detector.route
     }
 
+    private func handle(motionSample: MotionTelemetrySample) {
+        guard isRecording else { return }
+        motionSamples.append(motionSample)
+    }
+
     private func encodedSessionExportJSON() throws -> String {
         let sessionEndedAt = self.sessionEndedAt ?? sessionSamples.last?.timestamp ?? Date()
         let sessionStartedAt = self.sessionStartedAt ?? sessionSamples.first?.timestamp ?? sessionEndedAt
@@ -214,6 +226,7 @@ final class LiveTimingViewModel: ObservableObject {
         let crossingSpeeds = gateCrossings.map(\.speedAtCrossingMPS)
         let sampleSpeeds = sessionSamples.map(\.speedMPS)
         let totalDistanceMeters = accumulatedDistanceMeters(for: sessionSamples)
+        let motionSampleRateHZ = estimatedSampleRateHz(for: motionSamples.map(\.timestamp))
 
         let payload = LiveSessionExport(
             metadata: LiveSessionExport.Metadata(
@@ -229,7 +242,8 @@ final class LiveTimingViewModel: ObservableObject {
                 competitorID: normalizedCompetitorID,
                 driverName: normalizedDriverName,
                 driverNumber: normalizedDriverNumber,
-                raceDirection: raceDirection.rawValue
+                raceDirection: raceDirection.rawValue,
+                phoneMountOrientation: phoneMountOrientation.rawValue
             ),
             summary: LiveSessionExport.Summary(
                 lapsCount: laps.count,
@@ -240,6 +254,8 @@ final class LiveTimingViewModel: ObservableObject {
                 topCrossingSpeedMPS: crossingSpeeds.max(),
                 averageSampleSpeedMPS: average(of: sampleSpeeds),
                 maxSampleSpeedMPS: sampleSpeeds.max(),
+                motionSampleCount: motionSamples.count,
+                estimatedMotionSampleRateHZ: motionSampleRateHZ,
                 totalDistanceMeters: totalDistanceMeters,
                 averageSpeedFromDistanceMPS: durationSeconds > 0 ? totalDistanceMeters / durationSeconds : nil
             ),
@@ -273,18 +289,18 @@ final class LiveTimingViewModel: ObservableObject {
                     speedAtCrossingMPS: crossing.speedAtCrossingMPS
                 )
             },
-            samples: sessionSamples.map { sample in
-                LiveSessionExport.Sample(
+            motionSamples: motionSamples.map { sample in
+                LiveSessionExport.MotionSample(
                     timestamp: sample.timestamp,
-                    latitude: sample.coordinate.latitude,
-                    longitude: sample.coordinate.longitude,
-                    speedMPS: sample.speedMPS,
-                    horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
-                    courseDegrees: sample.courseDegrees,
                     accelerationX: sample.accelerationX,
                     accelerationY: sample.accelerationY,
                     accelerationZ: sample.accelerationZ,
-                    yawRate: sample.yawRate
+                    yawRate: sample.yawRate,
+                    latitude: sample.latitude,
+                    longitude: sample.longitude,
+                    speedMPS: sample.speedMPS,
+                    courseDegrees: sample.courseDegrees,
+                    horizontalAccuracyMeters: sample.horizontalAccuracyMeters
                 )
             }
         )
@@ -330,6 +346,21 @@ final class LiveTimingViewModel: ObservableObject {
     private func average(of values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    private func estimatedSampleRateHz(for timestamps: [Date]) -> Double? {
+        guard timestamps.count > 1 else { return nil }
+        let sorted = timestamps.sorted()
+        var totalDelta = 0.0
+        var count = 0
+        for index in 1..<sorted.count {
+            let delta = sorted[index].timeIntervalSince(sorted[index - 1])
+            guard delta > 0 else { continue }
+            totalDelta += delta
+            count += 1
+        }
+        guard count > 0 else { return nil }
+        return 1.0 / (totalDelta / Double(count))
     }
 
     private func normalizeKartForTrack() {
@@ -425,6 +456,7 @@ final class LiveTimingViewModel: ObservableObject {
             let lapNumber = lap.number > 0 ? lap.number : (index + 1)
             let lapTimestamp = lap.crossedAt ?? endedAt
             let route = resolvedImportedRoute(for: lap, lapIndex: index, payload: payload)
+            let lapMotionSamples = resolvedImportedMotionSamples(for: lap, lapIndex: index, payload: payload)
             return Lap(
                 track: track,
                 kart: kart,
@@ -445,14 +477,15 @@ final class LiveTimingViewModel: ObservableObject {
                     distanceMeters: lap.telemetry.distanceMeters ?? 0,
                     sampleCount: lap.telemetry.sampleCount ?? 0
                 ),
-                route: route
+                route: route,
+                motionSamples: lapMotionSamples
             )
         }
 
-        let sampleSpeeds = payload.samples.map(\.speedMPS)
-        let peakAcceleration = payload.samples.compactMap(\.accelerationX).map(abs).max() ?? 0
-        let peakDeceleration = abs(payload.samples.compactMap(\.accelerationX).min() ?? 0)
-        let peakYaw = payload.samples.compactMap(\.yawRate).map(abs).max()
+        let motionSpeedSamples = payload.motionSamples.compactMap(\.speedMPS)
+        let peakAcceleration = payload.motionSamples.map(\.accelerationX).map(abs).max() ?? 0
+        let peakDeceleration = abs(payload.motionSamples.map(\.accelerationX).min() ?? 0)
+        let peakYaw = payload.motionSamples.map(\.yawRate).map(abs).max()
             ?? payload.laps.compactMap(\.telemetry.maxYawRate).max()
             ?? 0
 
@@ -463,13 +496,15 @@ final class LiveTimingViewModel: ObservableObject {
             durationSeconds: durationSeconds,
             raceDirection: raceDirection,
             gateCrossingsCount: max(payload.summary.gateCrossingsCount, payload.gateCrossings.count),
-            sampleCount: payload.samples.count,
+            sampleCount: payload.motionSamples.count,
             totalDistanceMeters: payload.summary.totalDistanceMeters,
-            averageSpeedMPS: payload.summary.averageSampleSpeedMPS ?? average(of: sampleSpeeds) ?? 0,
-            peakSpeedMPS: payload.summary.maxSampleSpeedMPS ?? sampleSpeeds.max() ?? 0,
+            averageSpeedMPS: payload.summary.averageSampleSpeedMPS ?? average(of: motionSpeedSamples) ?? 0,
+            peakSpeedMPS: payload.summary.maxSampleSpeedMPS ?? motionSpeedSamples.max() ?? 0,
             peakAccelerationG: peakAcceleration,
             peakDecelerationG: peakDeceleration,
-            peakYawRate: peakYaw
+            peakYawRate: peakYaw,
+            phoneMountOrientation: resolvedPhoneMountOrientation(from: payload.metadata.phoneMountOrientation),
+            estimatedMotionSampleRateHZ: payload.summary.estimatedMotionSampleRateHZ
         )
 
         let identifier = normalized(payload.metadata.sessionIdentifier ?? "")
@@ -589,6 +624,24 @@ final class LiveTimingViewModel: ObservableObject {
         return .clockwise
     }
 
+    private func resolvedPhoneMountOrientation(from raw: String?) -> PhoneMountOrientation? {
+        guard let raw else { return nil }
+        if let exact = PhoneMountOrientation(rawValue: raw) {
+            return exact
+        }
+        let normalized = raw.lowercased()
+        if normalized.contains("landscape") && normalized.contains("right") {
+            return .landscapeRight
+        }
+        if normalized.contains("landscape") {
+            return .landscapeLeft
+        }
+        if normalized.contains("portrait") {
+            return .portrait
+        }
+        return nil
+    }
+
     private func resolvedImportedRoute(
         for lap: LiveSessionExport.Lap,
         lapIndex: Int,
@@ -598,9 +651,10 @@ final class LiveTimingViewModel: ObservableObject {
             return explicitRoute.map { GeoCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
         }
 
-        guard !payload.samples.isEmpty else { return [] }
+        let routedSamples = payload.motionSamples.filter { $0.latitude != nil && $0.longitude != nil }
+        guard !routedSamples.isEmpty else { return [] }
 
-        let lapEnd = lap.crossedAt ?? payload.metadata.sessionEndedAt ?? payload.samples.last?.timestamp
+        let lapEnd = lap.crossedAt ?? payload.metadata.sessionEndedAt ?? routedSamples.last?.timestamp
         let lapStart: Date? = {
             if lapIndex > 0 {
                 return payload.laps[lapIndex - 1].crossedAt
@@ -608,14 +662,51 @@ final class LiveTimingViewModel: ObservableObject {
             return payload.gateCrossings.first?.crossedAt ?? payload.metadata.sessionStartedAt
         }()
 
-        let start = lapStart ?? payload.samples.first?.timestamp
-        let end = lapEnd ?? payload.samples.last?.timestamp
+        let start = lapStart ?? routedSamples.first?.timestamp
+        let end = lapEnd ?? routedSamples.last?.timestamp
 
         guard let start, let end, start <= end else { return [] }
 
-        return payload.samples
+        return routedSamples
             .filter { $0.timestamp >= start && $0.timestamp <= end }
-            .map { GeoCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+            .compactMap { sample in
+                guard let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
+                return GeoCoordinate(latitude: latitude, longitude: longitude)
+            }
+    }
+
+    private func resolvedImportedMotionSamples(
+        for lap: LiveSessionExport.Lap,
+        lapIndex: Int,
+        payload: LiveSessionExport
+    ) -> [LapMotionSample] {
+        let lapEnd = lap.crossedAt ?? payload.metadata.sessionEndedAt ?? payload.motionSamples.last?.timestamp
+        let lapStart: Date? = {
+            if lapIndex > 0 {
+                return payload.laps[lapIndex - 1].crossedAt
+            }
+            return payload.gateCrossings.first?.crossedAt ?? payload.metadata.sessionStartedAt
+        }()
+
+        let start = lapStart ?? payload.motionSamples.first?.timestamp
+        let end = lapEnd ?? payload.motionSamples.last?.timestamp
+
+        guard let start, let end, start <= end else { return [] }
+
+        return payload.motionSamples
+            .filter { $0.timestamp >= start && $0.timestamp <= end }
+            .map { sample in
+                LapMotionSample(
+                    timestamp: sample.timestamp,
+                    accelerationX: sample.accelerationX,
+                    accelerationY: sample.accelerationY,
+                    accelerationZ: sample.accelerationZ,
+                    yawRate: sample.yawRate,
+                    speedMPS: sample.speedMPS,
+                    latitude: sample.latitude,
+                    longitude: sample.longitude
+                )
+            }
     }
 }
 
@@ -696,9 +787,32 @@ extension LiveTimingViewModel {
         let endedAt = sessionEndedAt ?? sessionSamples.last?.timestamp ?? Date()
         let startedAt = sessionStartedAt ?? sessionSamples.first?.timestamp ?? endedAt
         let durationSeconds = max(0, endedAt.timeIntervalSince(startedAt))
+        let motionSampleRateHZ = estimatedSampleRateHz(for: motionSamples.map(\.timestamp))
 
-        let mappedLaps = laps.map { lap in
-            Lap(
+        let mappedLaps: [Lap] = laps.enumerated().map { index, lap in
+            let lapStart: Date = {
+                if index == 0 {
+                    return gateCrossings.first?.crossedAt ?? sessionStartedAt ?? lap.crossedAt
+                }
+                return laps[index - 1].crossedAt
+            }()
+
+            let lapMotionSamples = motionSamples
+                .filter { $0.timestamp >= lapStart && $0.timestamp <= lap.crossedAt }
+                .map { sample in
+                    LapMotionSample(
+                        timestamp: sample.timestamp,
+                        accelerationX: sample.accelerationX,
+                        accelerationY: sample.accelerationY,
+                        accelerationZ: sample.accelerationZ,
+                        yawRate: sample.yawRate,
+                        speedMPS: sample.speedMPS,
+                        latitude: sample.latitude,
+                        longitude: sample.longitude
+                    )
+                }
+
+            return Lap(
                 track: selectedTrack,
                 kart: selectedKart,
                 competitorID: normalizedCompetitorID,
@@ -718,7 +832,8 @@ extension LiveTimingViewModel {
                     distanceMeters: lap.telemetry.distanceMeters,
                     sampleCount: lap.telemetry.sampleCount
                 ),
-                route: lap.route
+                route: lap.route,
+                motionSamples: lapMotionSamples
             )
         }
 
@@ -735,7 +850,9 @@ extension LiveTimingViewModel {
             peakSpeedMPS: peakSpeedMPS,
             peakAccelerationG: peakAccelerationG,
             peakDecelerationG: peakDecelerationG,
-            peakYawRate: peakYawRate
+            peakYawRate: peakYawRate,
+            phoneMountOrientation: phoneMountOrientation,
+            estimatedMotionSampleRateHZ: motionSampleRateHZ
         )
 
         return Heat(
@@ -766,6 +883,7 @@ private struct LiveSessionExport: Codable {
         let driverName: String?
         let driverNumber: String?
         let raceDirection: String?
+        let phoneMountOrientation: String?
     }
 
     struct Summary: Codable {
@@ -777,6 +895,8 @@ private struct LiveSessionExport: Codable {
         let topCrossingSpeedMPS: Double?
         let averageSampleSpeedMPS: Double?
         let maxSampleSpeedMPS: Double?
+        let motionSampleCount: Int
+        let estimatedMotionSampleRateHZ: Double?
         let totalDistanceMeters: Double
         let averageSpeedFromDistanceMPS: Double?
     }
@@ -811,22 +931,22 @@ private struct LiveSessionExport: Codable {
         let speedAtCrossingMPS: Double
     }
 
-    struct Sample: Codable {
+    struct MotionSample: Codable {
         let timestamp: Date
-        let latitude: Double
-        let longitude: Double
-        let speedMPS: Double
-        let horizontalAccuracyMeters: Double
+        let accelerationX: Double
+        let accelerationY: Double
+        let accelerationZ: Double
+        let yawRate: Double
+        let latitude: Double?
+        let longitude: Double?
+        let speedMPS: Double?
         let courseDegrees: Double?
-        let accelerationX: Double?
-        let accelerationY: Double?
-        let accelerationZ: Double?
-        let yawRate: Double?
+        let horizontalAccuracyMeters: Double?
     }
 
     let metadata: Metadata
     let summary: Summary
     let laps: [Lap]
     let gateCrossings: [GateCrossing]
-    let samples: [Sample]
+    let motionSamples: [MotionSample]
 }

@@ -21,6 +21,8 @@ struct LiveSessionMetadata: Hashable, Codable {
     let peakAccelerationG: Double
     let peakDecelerationG: Double
     let peakYawRate: Double
+    let phoneMountOrientation: PhoneMountOrientation?
+    let estimatedMotionSampleRateHZ: Double?
 }
 
 struct HeatCompetitor: Identifiable, Hashable {
