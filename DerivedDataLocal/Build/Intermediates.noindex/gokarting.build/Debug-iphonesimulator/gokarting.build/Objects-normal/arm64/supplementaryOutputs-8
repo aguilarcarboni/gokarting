@@ -1,0 +1,23 @@
+{
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/Services/LapDetectionEngine.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LapDetectionEngine.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LapDetectionEngine.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LapDetectionEngine.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LapDetectionEngine.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LapDetectionEngine.swiftdeps"
+  },
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/Services/SensorRecorder.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/SensorRecorder.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/SensorRecorder.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/SensorRecorder.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/SensorRecorder.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/SensorRecorder.swiftdeps"
+  },
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/ViewModel/LiveTimingViewModel.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LiveTimingViewModel.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LiveTimingViewModel.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LiveTimingViewModel.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LiveTimingViewModel.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/arm64/LiveTimingViewModel.swiftdeps"
+  }
+}

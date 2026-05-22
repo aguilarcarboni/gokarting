@@ -15,6 +15,11 @@ final class SensorRecorder: NSObject, ObservableObject {
     @Published private(set) var lastAccelerometerTimestamp: Date?
     @Published private(set) var lastGyroTimestamp: Date?
     @Published private(set) var lastLocationError: String?
+    var phoneMountOrientation: PhoneMountOrientation = .landscapeLeft {
+        didSet {
+            applyHeadingOrientation()
+        }
+    }
 
     var onSample: ((TelemetrySample) -> Void)?
     var onMotionSample: ((MotionTelemetrySample) -> Void)?
@@ -31,6 +36,7 @@ final class SensorRecorder: NSObject, ObservableObject {
     private var latestAcceleration: (x: Double, y: Double, z: Double)?
     private var latestYawRate: Double?
     private var latestLocationSnapshot: LocationSnapshot?
+    private var lastAcceptedLocationTimestamp: Date?
     private var lastAccelerometerLogAt: Date?
     private var lastGyroLogAt: Date?
     private var lastLocationLogAt: Date?
@@ -50,7 +56,9 @@ final class SensorRecorder: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.activityType = .automotiveNavigation
         locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.headingFilter = kCLHeadingFilterNone
         locationManager.pausesLocationUpdatesAutomatically = false
+        applyHeadingOrientation()
         accelerometerAvailable = motionManager.isAccelerometerAvailable
         gyroscopeAvailable = motionManager.isGyroAvailable
     }
@@ -82,22 +90,29 @@ final class SensorRecorder: NSObject, ObservableObject {
 
     private func startMotionUpdatesIfAvailable() {
         if motionManager.isDeviceMotionAvailable {
-            motionManager.deviceMotionUpdateInterval = 1.0 / 20.0
+            motionManager.deviceMotionUpdateInterval = 1.0 / 100.0
             motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] update, _ in
                 guard let data = update else { return }
                 Task { @MainActor in
                     guard let self else { return }
                     let now = Date()
-                    self.latestAcceleration = (
+                    let normalized = self.normalizeAcceleration(
                         x: data.userAcceleration.x,
                         y: data.userAcceleration.y,
                         z: data.userAcceleration.z
                     )
-                    self.latestYawRate = data.rotationRate.z
+                    self.latestAcceleration = normalized
+                    self.latestYawRate = self.computeYawRate(data.rotationRate, gravity: data.gravity)
                     self.lastAccelerometerTimestamp = now
                     self.lastGyroTimestamp = now
-                    self.logAccelerometerIfNeeded(data.userAcceleration, at: now)
-                    self.logGyroIfNeeded(data.rotationRate, at: now)
+                    self.logAccelerometerIfNeeded(
+                        CMAcceleration(x: normalized.x, y: normalized.y, z: normalized.z),
+                        at: now
+                    )
+                    self.logGyroIfNeeded(
+                        CMRotationRate(x: data.rotationRate.x, y: data.rotationRate.y, z: self.latestYawRate ?? 0),
+                        at: now
+                    )
                     self.emitMotionSample(at: now)
                 }
             }
@@ -105,16 +120,17 @@ final class SensorRecorder: NSObject, ObservableObject {
         }
 
         if motionManager.isAccelerometerAvailable && motionManager.isGyroAvailable {
-            motionManager.accelerometerUpdateInterval = 1.0 / 20.0
-            motionManager.gyroUpdateInterval = 1.0 / 20.0
+            motionManager.accelerometerUpdateInterval = 1.0 / 100.0
+            motionManager.gyroUpdateInterval = 1.0 / 100.0
             motionManager.startAccelerometerUpdates(to: motionQueue) { [weak self] update, _ in
                 guard let data = update?.acceleration else { return }
                 Task { @MainActor in
-                    self?.latestAcceleration = (x: data.x, y: data.y, z: data.z)
+                    self?.latestAcceleration = self?.normalizeAcceleration(x: data.x, y: data.y, z: data.z)
                     guard let self else { return }
                     let now = Date()
                     self.lastAccelerometerTimestamp = now
-                    self.logAccelerometerIfNeeded(data, at: now)
+                    let accel = self.latestAcceleration ?? (x: data.x, y: data.y, z: data.z)
+                    self.logAccelerometerIfNeeded(CMAcceleration(x: accel.x, y: accel.y, z: accel.z), at: now)
                     self.emitMotionSample(at: now)
                 }
             }
@@ -123,12 +139,55 @@ final class SensorRecorder: NSObject, ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     let now = Date()
-                    self.latestYawRate = data.z
+                    self.latestYawRate = self.normalizeYawRate(data.z)
                     self.lastGyroTimestamp = now
-                    self.logGyroIfNeeded(data, at: now)
+                    self.logGyroIfNeeded(CMRotationRate(x: data.x, y: data.y, z: self.latestYawRate ?? data.z), at: now)
                     self.emitMotionSample(at: now)
                 }
             }
+        }
+    }
+
+    private func normalizeAcceleration(x: Double, y: Double, z: Double) -> (x: Double, y: Double, z: Double) {
+        switch phoneMountOrientation {
+        case .landscapeLeft:
+            return (x: -x, y: y, z: z)
+        case .landscapeRight:
+            return (x: x, y: -y, z: z)
+        case .portrait:
+            return (x: y, y: x, z: z)
+        }
+    }
+
+    private func normalizeYawRate(_ yawRate: Double) -> Double {
+        switch phoneMountOrientation {
+        case .landscapeLeft:
+            return -yawRate
+        case .landscapeRight, .portrait:
+            return yawRate
+        }
+    }
+
+    private func computeYawRate(_ rate: CMRotationRate, gravity: CMAcceleration) -> Double {
+        let mag = sqrt((gravity.x * gravity.x) + (gravity.y * gravity.y) + (gravity.z * gravity.z))
+        guard mag > 1e-6 else {
+            return normalizeYawRate(rate.z)
+        }
+        let gx = gravity.x / mag
+        let gy = gravity.y / mag
+        let gz = gravity.z / mag
+        let verticalYaw = (rate.x * gx) + (rate.y * gy) + (rate.z * gz)
+        return normalizeYawRate(verticalYaw)
+    }
+
+    private func applyHeadingOrientation() {
+        switch phoneMountOrientation {
+        case .landscapeLeft:
+            locationManager.headingOrientation = .landscapeLeft
+        case .landscapeRight:
+            locationManager.headingOrientation = .landscapeRight
+        case .portrait:
+            locationManager.headingOrientation = .portrait
         }
     }
 
@@ -212,6 +271,18 @@ extension SensorRecorder: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for location in locations {
+            guard location.horizontalAccuracy >= 0 else { continue }
+            guard location.horizontalAccuracy <= 40 else { continue }
+
+            if abs(location.timestamp.timeIntervalSinceNow) > 1.0 {
+                continue
+            }
+
+            if let lastAcceptedLocationTimestamp,
+               location.timestamp <= lastAcceptedLocationTimestamp {
+                continue
+            }
+
             let speed = max(0, location.speed)
             let course: Double? = location.course >= 0 ? location.course : nil
             logLocationIfNeeded(location, speed: speed, course: course, at: Date())
@@ -234,6 +305,7 @@ extension SensorRecorder: CLLocationManagerDelegate {
                 courseDegrees: course,
                 horizontalAccuracyMeters: location.horizontalAccuracy
             )
+            lastAcceptedLocationTimestamp = location.timestamp
             lastLocationTimestamp = location.timestamp
             lastLocationError = nil
             onSample?(sample)

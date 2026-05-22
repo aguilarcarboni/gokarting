@@ -11,6 +11,7 @@ struct LiveTimingView: View {
     @State private var selectedLapNumber: Int?
     @State private var showLiveLaps = false
     @State private var debugPreviewHeat: Heat?
+    @State private var showDebugImportPicker = false
     private let preferredTrack: Track = .p1ShortConfig
 
     private var orderedTracks: [Track] {
@@ -85,6 +86,8 @@ struct LiveTimingView: View {
                 viewModel.requestPermissions()
                 setupCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
                 summaryCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
+                UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                syncPhoneMountOrientationFromDevice()
                 updateOrientation(for: viewModel.phase)
             }
             .onChange(of: viewModel.selectedTrack) { _, _ in
@@ -100,7 +103,13 @@ struct LiveTimingView: View {
                 if newPhase != .live {
                     showLiveLaps = false
                 }
+                syncPhoneMountOrientationFromDevice()
                 updateOrientation(for: newPhase)
+            }
+            .onChange(of: viewModel.phoneMountOrientation) { _, _ in
+                if viewModel.phase == .live {
+                    updateOrientation(for: .live)
+                }
             }
             .onChange(of: viewModel.latestLap?.number) { _, newNumber in
                 if let newNumber {
@@ -108,7 +117,11 @@ struct LiveTimingView: View {
                 }
             }
             .onDisappear {
+                UIDevice.current.endGeneratingDeviceOrientationNotifications()
                 requestOrientation(.portrait)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                syncPhoneMountOrientationFromDevice()
             }
             .sheet(item: $debugPreviewHeat) { heat in
                 NavigationStack {
@@ -116,6 +129,27 @@ struct LiveTimingView: View {
                         .navigationTitle("Imported Heat")
                         .navigationBarTitleDisplayMode(.inline)
                 }
+            }
+            .confirmationDialog(
+                "Select Debug JSON",
+                isPresented: $showDebugImportPicker,
+                titleVisibility: .visible
+            ) {
+                Button("data.json") {
+                    viewModel.importDebugSampleSessionFromFile(named: "data.json")
+                    if let imported = viewModel.debugImportedHeat {
+                        debugPreviewHeat = imported
+                    }
+                }
+                Button("data2.json") {
+                    viewModel.importDebugSampleSessionFromFile(named: "data2.json")
+                    if let imported = viewModel.debugImportedHeat {
+                        debugPreviewHeat = imported
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Choose which sample file to import.")
             }
         }
     }
@@ -656,16 +690,13 @@ struct LiveTimingView: View {
                 Text("Debug JSON Import")
                     .font(.headline)
 
-                Text("Load `gokarting/data.json` and generate a Heat preview without saving.")
+                Text("Load `gokarting/data.json` or `gokarting/data2.json` and generate a Heat preview without saving.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 10) {
-                    Button("Load Sample Session (data.json)") {
-                        viewModel.importDebugSampleSessionFromFile()
-                        if let imported = viewModel.debugImportedHeat {
-                            debugPreviewHeat = imported
-                        }
+                    Button("Load Sample Session (data.json/data2.json)") {
+                        showDebugImportPicker = true
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.blue)
@@ -764,9 +795,57 @@ struct LiveTimingView: View {
     private func updateOrientation(for phase: LiveTimingViewModel.SessionPhase) {
         switch phase {
         case .live:
-            requestOrientation(.landscape)
+            switch viewModel.phoneMountOrientation {
+            case .landscapeLeft:
+                requestOrientation(.landscapeLeft)
+            case .landscapeRight:
+                requestOrientation(.landscapeRight)
+            case .portrait:
+                requestOrientation(.portrait)
+            }
         case .setup, .summary:
             requestOrientation(.portrait)
+        }
+    }
+
+    private func syncPhoneMountOrientationFromDevice() {
+#if canImport(UIKit)
+        let interfaceOrientation = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
+        if let orientation = phoneMountOrientation(from: interfaceOrientation) {
+            viewModel.setPhoneMountOrientation(orientation)
+            return
+        }
+
+        if let orientation = phoneMountOrientation(from: UIDevice.current.orientation) {
+            viewModel.setPhoneMountOrientation(orientation)
+        }
+#endif
+    }
+
+    private func phoneMountOrientation(from interfaceOrientation: UIInterfaceOrientation?) -> PhoneMountOrientation? {
+        guard let interfaceOrientation else { return nil }
+        switch interfaceOrientation {
+        case .landscapeLeft:
+            return .landscapeLeft
+        case .landscapeRight:
+            return .landscapeRight
+        case .portrait, .portraitUpsideDown:
+            return .portrait
+        default:
+            return nil
+        }
+    }
+
+    private func phoneMountOrientation(from deviceOrientation: UIDeviceOrientation) -> PhoneMountOrientation? {
+        switch deviceOrientation {
+        case .landscapeLeft:
+            return .landscapeLeft
+        case .landscapeRight:
+            return .landscapeRight
+        case .portrait, .portraitUpsideDown:
+            return .portrait
+        default:
+            return nil
         }
     }
 

@@ -105,6 +105,7 @@ final class LiveTimingViewModel: ObservableObject {
         exportStatus = nil
         phase = .live
 
+        sensorRecorder.phoneMountOrientation = phoneMountOrientation
         sensorRecorder.start()
         isRecording = true
         isSensorCheckRunning = false
@@ -139,8 +140,15 @@ final class LiveTimingViewModel: ObservableObject {
 
     func startSensorCheck() {
         guard !isRecording else { return }
+        sensorRecorder.phoneMountOrientation = phoneMountOrientation
         sensorRecorder.start()
         isSensorCheckRunning = true
+    }
+
+    func setPhoneMountOrientation(_ orientation: PhoneMountOrientation) {
+        guard phoneMountOrientation != orientation else { return }
+        phoneMountOrientation = orientation
+        sensorRecorder.phoneMountOrientation = orientation
     }
 
     func stopSensorCheck() {
@@ -169,15 +177,15 @@ final class LiveTimingViewModel: ObservableObject {
         }
     }
 
-    func importDebugSampleSessionFromFile() {
-        let urls = debugSampleCandidateURLs()
+    func importDebugSampleSessionFromFile(named fileName: String) {
+        let urls = debugSampleCandidateURLs(for: fileName)
         print("[LiveTimingDebug] Looking for sample session at:")
         urls.forEach { print("  - \($0.path)") }
 
         guard let url = urls.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             debugImportedHeat = nil
-            debugImportStatus = "Import failed: data.json not found."
-            print("[LiveTimingDebug] data.json not found in known paths.")
+            debugImportStatus = "Import failed: \(fileName) not found."
+            print("[LiveTimingDebug] \(fileName) not found in known paths.")
             return
         }
 
@@ -558,17 +566,19 @@ final class LiveTimingViewModel: ObservableObject {
         return error.localizedDescription
     }
 
-    private func debugSampleCandidateURLs() -> [URL] {
+    private func debugSampleCandidateURLs(for fileName: String) -> [URL] {
+        let baseName = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension.isEmpty ? "json" : (fileName as NSString).pathExtension
+
         var urls: [URL] = []
-        if let bundled = Bundle.main.url(forResource: "data", withExtension: "json") {
+        if let bundled = Bundle.main.url(forResource: baseName, withExtension: ext) {
             urls.append(bundled)
         }
 
-        let sourceTreeURL = URL(fileURLWithPath: #filePath)
+        let sourceTreeBaseURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("data.json")
-        urls.append(sourceTreeURL)
+        urls.append(sourceTreeBaseURL.appendingPathComponent(fileName))
 
         return urls
     }

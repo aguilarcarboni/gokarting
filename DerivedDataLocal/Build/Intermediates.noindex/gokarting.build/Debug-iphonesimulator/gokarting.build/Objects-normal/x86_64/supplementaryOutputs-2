@@ -1,0 +1,23 @@
+{
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/Model/Race.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Race.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Race.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Race.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Race.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Race.swiftdeps"
+  },
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/Model/SessionModels.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/SessionModels.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/SessionModels.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/SessionModels.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/SessionModels.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/SessionModels.swiftdeps"
+  },
+  "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/gokarting/Model/Track.swift" : {
+    "const-values" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Track.swiftconstvalues",
+    "dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Track.d",
+    "diagnostics" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Track.dia",
+    "object" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Track.o",
+    "swift-dependencies" : "/Users/aguilarcarboni/Developer/Repositories/Personal/gokarting/DerivedDataLocal/Build/Intermediates.noindex/gokarting.build/Debug-iphonesimulator/gokarting.build/Objects-normal/x86_64/Track.swiftdeps"
+  }
+}
