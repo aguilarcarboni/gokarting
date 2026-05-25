@@ -6,6 +6,7 @@ struct LapView: View {
     let lap: Lap
     let heat: Heat
     @State private var lapCameraPosition: MapCameraPosition = .automatic
+    @State private var selectedTelemetryTime: Double?
 
     private var lapCompetitor: HeatCompetitor {
         heat.competitor(for: lap)
@@ -30,7 +31,8 @@ struct LapView: View {
     }
 
     private var sanitizedLapRoute: [GeoCoordinate] {
-        let validPoints = lap.route.filter { point in
+        let sourceRoute = motionDerivedRoute.isEmpty ? lap.route : motionDerivedRoute
+        let validPoints = sourceRoute.filter { point in
             (-90.0 ... 90.0).contains(point.latitude)
             && (-180.0 ... 180.0).contains(point.longitude)
             && !(abs(point.latitude) < 0.000001 && abs(point.longitude) < 0.000001)
@@ -48,12 +50,27 @@ struct LapView: View {
         }
     }
 
+    private var motionDerivedRoute: [GeoCoordinate] {
+        let motionCoords = lapMotionSamples.compactMap { sample -> (Date, GeoCoordinate)? in
+            guard let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
+            return (sample.timestamp, GeoCoordinate(latitude: latitude, longitude: longitude))
+        }
+        guard motionCoords.count > 2 else { return [] }
+        return smoothedRoute(from: motionCoords)
+    }
+
+
     private var startCoordinate: CLLocationCoordinate2D? {
         lapPolyline.first
     }
 
     private var finishCoordinate: CLLocationCoordinate2D? {
         lapPolyline.last
+    }
+
+    private var selectedTelemetryCoordinate: CLLocationCoordinate2D? {
+        guard let selectedTelemetryTime else { return nil }
+        return telemetryCoordinate(at: selectedTelemetryTime)?.clCoordinate
     }
 
     private struct TelemetryPoint: Identifiable {
@@ -68,31 +85,43 @@ struct LapView: View {
 
     private var speedSeries: [TelemetryPoint] {
         guard let start = lapMotionSamples.first?.timestamp else { return [] }
-        return lapMotionSamples.compactMap { sample in
+        let raw: [TelemetryPoint] = lapMotionSamples.compactMap { sample in
             guard let speed = sample.speedMPS else { return nil }
             return TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: speed)
         }
+        let deDuplicated = deduplicateAdjacent(raw, epsilon: 0.02)
+        let smoothed = movingAverage(deDuplicated, window: 5)
+        return downsample(smoothed, maxPoints: 500)
     }
 
     private var longitudinalAccelSeries: [TelemetryPoint] {
         guard let start = lapMotionSamples.first?.timestamp else { return [] }
-        return lapMotionSamples.map { sample in
+        let raw = lapMotionSamples.map { sample in
             TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.accelerationX)
         }
+        let clipped = clipOutliers(raw, sigma: 2.8)
+        let smoothed = movingAverage(clipped, window: 11)
+        return downsample(smoothed, maxPoints: 500)
     }
 
     private var lateralAccelSeries: [TelemetryPoint] {
         guard let start = lapMotionSamples.first?.timestamp else { return [] }
-        return lapMotionSamples.map { sample in
+        let raw = lapMotionSamples.map { sample in
             TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.accelerationY)
         }
+        let clipped = clipOutliers(raw, sigma: 2.8)
+        let smoothed = movingAverage(clipped, window: 11)
+        return downsample(smoothed, maxPoints: 500)
     }
 
     private var yawSeries: [TelemetryPoint] {
         guard let start = lapMotionSamples.first?.timestamp else { return [] }
-        return lapMotionSamples.map { sample in
+        let raw = lapMotionSamples.map { sample in
             TelemetryPoint(t: sample.timestamp.timeIntervalSince(start), value: sample.yawRate)
         }
+        let clipped = clipOutliers(raw, sigma: 2.8)
+        let smoothed = movingAverage(clipped, window: 11)
+        return downsample(smoothed, maxPoints: 500)
     }
 
     var body: some View {
@@ -144,8 +173,13 @@ struct LapView: View {
                                 Marker("Finish", coordinate: finishCoordinate)
                                     .tint(.red)
                             }
+
+                            if let selectedTelemetryCoordinate {
+                                Marker("Selected", coordinate: selectedTelemetryCoordinate)
+                                    .tint(.yellow)
+                            }
                         }
-                        .mapStyle(.standard(elevation: .realistic))
+                        .mapStyle(.imagery(elevation: .realistic))
                         .mapControls {
                             MapCompass()
                             MapScaleView()
@@ -163,48 +197,142 @@ struct LapView: View {
                         VStack(spacing: 12) {
                             if !speedSeries.isEmpty {
                                 chartCard(title: "Speed (m/s)") {
-                                    Chart(speedSeries) { point in
-                                        LineMark(
-                                            x: .value("t", point.t),
-                                            y: .value("Speed", point.value)
-                                        )
-                                        .foregroundStyle(.green)
-                                        .interpolationMethod(.catmullRom)
+                                    Chart {
+                                        ForEach(speedSeries) { point in
+                                            LineMark(
+                                                x: .value("t", point.t),
+                                                y: .value("Speed", point.value)
+                                            )
+                                            .foregroundStyle(.green)
+                                            .interpolationMethod(.linear)
+                                        }
+                                        if let selectedTelemetryTime {
+                                            RuleMark(x: .value("Selected", selectedTelemetryTime))
+                                                .foregroundStyle(.yellow.opacity(0.7))
+                                        }
+                                    }
+                                    .chartOverlay { proxy in
+                                        GeometryReader { geometry in
+                                            Rectangle()
+                                                .fill(.clear)
+                                                .contentShape(Rectangle())
+                                                .gesture(
+                                                    DragGesture(minimumDistance: 0)
+                                                        .onChanged { value in
+                                                            let origin = geometry[proxy.plotAreaFrame].origin
+                                                            let x = value.location.x - origin.x
+                                                            if let t: Double = proxy.value(atX: x) {
+                                                                selectedTelemetryTime = max(0, t)
+                                                            }
+                                                        }
+                                                )
+                                        }
                                     }
                                     .frame(height: 150)
                                 }
                             }
 
-                            chartCard(title: "Acceleration (g)") {
+                            chartCard(title: "Longitudinal G") {
                                 Chart {
                                     ForEach(longitudinalAccelSeries) { point in
                                         LineMark(
                                             x: .value("t", point.t),
-                                            y: .value("Longitudinal", point.value)
+                                            y: .value("Longitudinal G", point.value)
                                         )
                                         .foregroundStyle(.red)
-                                        .interpolationMethod(.catmullRom)
+                                        .interpolationMethod(.linear)
                                     }
+                                    if let selectedTelemetryTime {
+                                        RuleMark(x: .value("Selected", selectedTelemetryTime))
+                                            .foregroundStyle(.yellow.opacity(0.7))
+                                    }
+                                }
+                                .chartOverlay { proxy in
+                                    GeometryReader { geometry in
+                                        Rectangle()
+                                            .fill(.clear)
+                                            .contentShape(Rectangle())
+                                            .gesture(
+                                                DragGesture(minimumDistance: 0)
+                                                    .onChanged { value in
+                                                        let origin = geometry[proxy.plotAreaFrame].origin
+                                                        let x = value.location.x - origin.x
+                                                        if let t: Double = proxy.value(atX: x) {
+                                                            selectedTelemetryTime = max(0, t)
+                                                        }
+                                                    }
+                                            )
+                                    }
+                                }
+                                .frame(height: 130)
+                            }
+
+                            chartCard(title: "Lateral G") {
+                                Chart {
                                     ForEach(lateralAccelSeries) { point in
                                         LineMark(
                                             x: .value("t", point.t),
-                                            y: .value("Lateral", point.value)
+                                            y: .value("Lateral G", point.value)
                                         )
                                         .foregroundStyle(.blue)
-                                        .interpolationMethod(.catmullRom)
+                                        .interpolationMethod(.linear)
+                                    }
+                                    if let selectedTelemetryTime {
+                                        RuleMark(x: .value("Selected", selectedTelemetryTime))
+                                            .foregroundStyle(.yellow.opacity(0.7))
                                     }
                                 }
-                                .frame(height: 150)
+                                .chartOverlay { proxy in
+                                    GeometryReader { geometry in
+                                        Rectangle()
+                                            .fill(.clear)
+                                            .contentShape(Rectangle())
+                                            .gesture(
+                                                DragGesture(minimumDistance: 0)
+                                                    .onChanged { value in
+                                                        let origin = geometry[proxy.plotAreaFrame].origin
+                                                        let x = value.location.x - origin.x
+                                                        if let t: Double = proxy.value(atX: x) {
+                                                            selectedTelemetryTime = max(0, t)
+                                                        }
+                                                    }
+                                            )
+                                    }
+                                }
+                                .frame(height: 130)
                             }
 
                             chartCard(title: "Yaw Rate (rad/s)") {
-                                Chart(yawSeries) { point in
-                                    LineMark(
-                                        x: .value("t", point.t),
-                                        y: .value("Yaw", point.value)
-                                    )
-                                    .foregroundStyle(.orange)
-                                    .interpolationMethod(.catmullRom)
+                                Chart {
+                                    ForEach(yawSeries) { point in
+                                        LineMark(
+                                            x: .value("t", point.t),
+                                            y: .value("Yaw", point.value)
+                                        )
+                                        .foregroundStyle(.orange)
+                                        .interpolationMethod(.linear)
+                                    }
+                                    if let selectedTelemetryTime {
+                                        RuleMark(x: .value("Selected", selectedTelemetryTime))
+                                            .foregroundStyle(.yellow.opacity(0.7))
+                                    }
+                                }
+                                .chartOverlay { proxy in
+                                    GeometryReader { geometry in
+                                        Rectangle()
+                                            .fill(.clear)
+                                            .contentShape(Rectangle())
+                                            .gesture(
+                                                DragGesture(minimumDistance: 0)
+                                                    .onChanged { value in
+                                                        let origin = geometry[proxy.plotAreaFrame].origin
+                                                        let x = value.location.x - origin.x
+                                                        if let t: Double = proxy.value(atX: x) {
+                                                            selectedTelemetryTime = max(0, t)
+                                                        }
+                                                    }
+                                            )
+                                    }
                                 }
                                 .frame(height: 130)
                             }
@@ -221,6 +349,13 @@ struct LapView: View {
                             if let speedAtCrossingMPS = lap.speedAtCrossingMPS {
                                 statRow(title: "Crossing Speed", value: String(format: "%.2f m/s", speedAtCrossingMPS))
                             }
+                            if let confidence = lap.confidenceScore {
+                                statRow(title: "Crossing Confidence", value: String(format: "%.0f%%", confidence * 100))
+                            }
+                            statRow(title: "Recovered Lap", value: (lap.isRecovered ?? false) ? "Yes" : "No")
+                            if let suspectReason = lap.suspectReason, !suspectReason.isEmpty {
+                                statRow(title: "Lap Flag", value: suspectReason)
+                            }
                             if let telemetry = lap.telemetry {
                                 statRow(title: "Longitudinal Accel", value: String(format: "%.2f g", telemetry.maxLongitudinalAccel))
                                 statRow(title: "Lateral Accel", value: String(format: "%.2f g", telemetry.maxLateralAccel))
@@ -228,7 +363,7 @@ struct LapView: View {
                                 statRow(title: "Avg Speed", value: String(format: "%.2f m/s", telemetry.averageSpeedMPS))
                                 statRow(title: "Peak Speed", value: String(format: "%.2f m/s", telemetry.peakSpeedMPS))
                                 statRow(title: "Distance", value: String(format: "%.1f m", telemetry.distanceMeters))
-                                statRow(title: "Motion Samples", value: "\(telemetry.sampleCount)")
+                                statRow(title: "GPS Samples", value: "\(telemetry.sampleCount)")
                             }
                         }
                     }
@@ -362,6 +497,107 @@ struct LapView: View {
     private func formatDelta(_ value: TimeInterval?) -> String {
         guard let value else { return "--" }
         return String(format: "%@%.3fs", value >= 0 ? "+" : "-", abs(value))
+    }
+
+    private func deduplicateAdjacent(_ points: [TelemetryPoint], epsilon: Double) -> [TelemetryPoint] {
+        guard let first = points.first else { return [] }
+        var reduced: [TelemetryPoint] = [first]
+        for point in points.dropFirst() {
+            if abs(point.value - reduced[reduced.count - 1].value) >= epsilon {
+                reduced.append(point)
+            }
+        }
+        if let last = points.last, last.t != reduced.last?.t {
+            reduced.append(last)
+        }
+        return reduced
+    }
+
+    private func movingAverage(_ points: [TelemetryPoint], window: Int) -> [TelemetryPoint] {
+        guard window > 1, points.count > window else { return points }
+        let half = window / 2
+        return points.enumerated().map { index, point in
+            let lower = max(0, index - half)
+            let upper = min(points.count - 1, index + half)
+            let slice = points[lower...upper]
+            let avg = slice.reduce(0.0) { $0 + $1.value } / Double(slice.count)
+            return TelemetryPoint(t: point.t, value: avg)
+        }
+    }
+
+    private func downsample(_ points: [TelemetryPoint], maxPoints: Int) -> [TelemetryPoint] {
+        guard points.count > maxPoints, maxPoints > 1 else { return points }
+        let stride = Double(points.count - 1) / Double(maxPoints - 1)
+        return (0..<maxPoints).map { index in
+            let sourceIndex = Int((Double(index) * stride).rounded())
+            return points[min(sourceIndex, points.count - 1)]
+        }
+    }
+
+    private func clipOutliers(_ points: [TelemetryPoint], sigma: Double) -> [TelemetryPoint] {
+        guard points.count > 8 else { return points }
+        let values = points.map(\.value)
+        let mean = values.reduce(0, +) / Double(values.count)
+        let variance = values.reduce(0.0) { partial, value in
+            let d = value - mean
+            return partial + (d * d)
+        } / Double(values.count)
+        let stdDev = sqrt(max(variance, 1e-9))
+        let minVal = mean - (sigma * stdDev)
+        let maxVal = mean + (sigma * stdDev)
+        return points.map { point in
+            TelemetryPoint(t: point.t, value: min(max(point.value, minVal), maxVal))
+        }
+    }
+
+    private func telemetryCoordinate(at time: Double) -> GeoCoordinate? {
+        guard let start = lapMotionSamples.first?.timestamp else { return nil }
+        let targetTimestamp = start.addingTimeInterval(time)
+        let candidates = lapMotionSamples.compactMap { sample -> (Date, GeoCoordinate)? in
+            guard let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
+            return (sample.timestamp, GeoCoordinate(latitude: latitude, longitude: longitude))
+        }
+        guard !candidates.isEmpty else { return nil }
+        return candidates.min(by: {
+            abs($0.0.timeIntervalSince(targetTimestamp)) < abs($1.0.timeIntervalSince(targetTimestamp))
+        })?.1
+    }
+
+    private func smoothedRoute(from datedRoute: [(Date, GeoCoordinate)]) -> [GeoCoordinate] {
+        guard let first = datedRoute.first else { return [] }
+        let origin = first.1
+        var stateX = Geometry.coordinateToLocalPoint(origin: origin, coordinate: first.1).x
+        var stateY = Geometry.coordinateToLocalPoint(origin: origin, coordinate: first.1).y
+        var velX = 0.0
+        var velY = 0.0
+        var previousTime = first.0
+        var smoothed: [GeoCoordinate] = [first.1]
+
+        for (timestamp, coordinate) in datedRoute.dropFirst() {
+            let dt = max(0.001, timestamp.timeIntervalSince(previousTime))
+            let measurement = Geometry.coordinateToLocalPoint(origin: origin, coordinate: coordinate)
+            let predX = stateX + (velX * dt)
+            let predY = stateY + (velY * dt)
+            let residualX = measurement.x - predX
+            let residualY = measurement.y - predY
+
+            // lightweight constant-velocity Kalman-like correction
+            let positionGain = 0.22
+            let velocityGain = 0.06
+            stateX = predX + (residualX * positionGain)
+            stateY = predY + (residualY * positionGain)
+            velX = velX + ((residualX / dt) * velocityGain)
+            velY = velY + ((residualY / dt) * velocityGain)
+
+            let corrected = Geometry.localPointToCoordinate(
+                origin: origin,
+                point: Vector2D(x: stateX, y: stateY)
+            )
+            smoothed.append(corrected)
+            previousTime = timestamp
+        }
+
+        return smoothed
     }
 
     private func mapRegionForLapRoute() -> MKCoordinateRegion? {

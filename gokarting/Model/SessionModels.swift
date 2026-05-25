@@ -109,8 +109,11 @@ struct TelemetrySample: Hashable {
     let coordinate: GeoCoordinate
     let timestamp: Date
     let speedMPS: Double
+    let speedAccuracyMPS: Double?
     let courseDegrees: Double?
+    let courseAccuracyDegrees: Double?
     let horizontalAccuracyMeters: Double
+    let timestampJitterSeconds: Double?
     let accelerationX: Double?
     let accelerationY: Double?
     let accelerationZ: Double?
@@ -146,6 +149,9 @@ struct RecordedLap: Identifiable, Hashable {
     let durationSeconds: TimeInterval
     let crossedAt: Date
     let speedAtCrossingMPS: Double
+    let confidenceScore: Double?
+    let suspectReason: String?
+    let isRecovered: Bool
     let telemetry: LapTelemetrySummary
     let route: [GeoCoordinate]
 }
@@ -188,19 +194,32 @@ enum Geometry {
     }
 
     static func segmentsIntersect(_ p1: Vector2D, _ p2: Vector2D, _ q1: Vector2D, _ q2: Vector2D) -> Bool {
+        intersectionParameters(p1, p2, q1, q2) != nil
+    }
+
+    static func intersectionParameters(
+        _ p1: Vector2D,
+        _ p2: Vector2D,
+        _ q1: Vector2D,
+        _ q2: Vector2D
+    ) -> (t: Double, u: Double)? {
         let r = p2 - p1
         let s = q2 - q1
         let denominator = cross(r, s)
         let qMinusP = q1 - p1
 
         if abs(denominator) < 1e-9 {
-            return false
+            return nil
         }
 
         let t = cross(qMinusP, s) / denominator
         let u = cross(qMinusP, r) / denominator
 
-        return (0.0 ... 1.0).contains(t) && (0.0 ... 1.0).contains(u)
+        guard (0.0 ... 1.0).contains(t), (0.0 ... 1.0).contains(u) else {
+            return nil
+        }
+
+        return (t, u)
     }
 
     static func cross(_ a: Vector2D, _ b: Vector2D) -> Double {

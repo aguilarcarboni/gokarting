@@ -33,6 +33,9 @@ struct Lap: Identifiable, Hashable, Codable {
     let timestamp: Date
     let crossedAt: Date?
     let speedAtCrossingMPS: Double?
+    let confidenceScore: Double?
+    let suspectReason: String?
+    let isRecovered: Bool?
     let telemetry: LapTelemetry?
     let route: [GeoCoordinate]
     let motionSamples: [LapMotionSample]?
@@ -49,6 +52,9 @@ struct Lap: Identifiable, Hashable, Codable {
         timestamp: Date = Date(),
         crossedAt: Date? = nil,
         speedAtCrossingMPS: Double? = nil,
+        confidenceScore: Double? = nil,
+        suspectReason: String? = nil,
+        isRecovered: Bool? = false,
         telemetry: LapTelemetry? = nil,
         route: [GeoCoordinate] = [],
         motionSamples: [LapMotionSample]? = nil
@@ -64,6 +70,9 @@ struct Lap: Identifiable, Hashable, Codable {
         self.timestamp = timestamp
         self.crossedAt = crossedAt
         self.speedAtCrossingMPS = speedAtCrossingMPS
+        self.confidenceScore = confidenceScore
+        self.suspectReason = suspectReason
+        self.isRecovered = isRecovered
         self.telemetry = telemetry
         self.route = route
         self.motionSamples = motionSamples

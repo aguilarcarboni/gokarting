@@ -117,6 +117,15 @@ struct HeatView: View {
                                             .font(.caption.weight(.semibold))
                                             .foregroundStyle(.yellow)
                                     }
+                                    if lap.isRecovered == true {
+                                        Label("Recovered", systemImage: "wrench.and.screwdriver.fill")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.orange)
+                                    } else if let confidence = lap.confidenceScore, confidence < 0.55 {
+                                        Label("Low GPS", systemImage: "exclamationmark.triangle.fill")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.orange)
+                                    }
 
                                     Image(systemName: "chevron.right")
                                         .font(.caption.bold())

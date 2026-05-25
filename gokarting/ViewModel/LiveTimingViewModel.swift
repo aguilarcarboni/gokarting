@@ -273,6 +273,9 @@ final class LiveTimingViewModel: ObservableObject {
                     crossedAt: lap.crossedAt,
                     durationSeconds: lap.durationSeconds,
                     speedAtCrossingMPS: lap.speedAtCrossingMPS,
+                    confidenceScore: lap.confidenceScore,
+                    suspectReason: lap.suspectReason,
+                    isRecovered: lap.isRecovered,
                     route: lap.route.map {
                         LiveSessionExport.LapRoutePoint(
                             latitude: $0.latitude,
@@ -476,6 +479,9 @@ final class LiveTimingViewModel: ObservableObject {
                 timestamp: lapTimestamp,
                 crossedAt: lap.crossedAt,
                 speedAtCrossingMPS: lap.speedAtCrossingMPS,
+                confidenceScore: lap.confidenceScore,
+                suspectReason: lap.suspectReason,
+                isRecovered: lap.isRecovered ?? false,
                 telemetry: LapTelemetry(
                     maxLongitudinalAccel: lap.telemetry.maxLongitudinalAccel ?? 0,
                     maxLateralAccel: lap.telemetry.maxLateralAccel ?? 0,
@@ -833,6 +839,9 @@ extension LiveTimingViewModel {
                 timestamp: lap.crossedAt,
                 crossedAt: lap.crossedAt,
                 speedAtCrossingMPS: lap.speedAtCrossingMPS,
+                confidenceScore: lap.confidenceScore,
+                suspectReason: lap.suspectReason,
+                isRecovered: lap.isRecovered,
                 telemetry: LapTelemetry(
                     maxLongitudinalAccel: lap.telemetry.maxLongitudinalAccel,
                     maxLateralAccel: lap.telemetry.maxLateralAccel,
@@ -916,6 +925,9 @@ private struct LiveSessionExport: Codable {
         let crossedAt: Date?
         let durationSeconds: TimeInterval
         let speedAtCrossingMPS: Double?
+        let confidenceScore: Double?
+        let suspectReason: String?
+        let isRecovered: Bool?
         let route: [LapRoutePoint]?
         let telemetry: LapTelemetry
     }

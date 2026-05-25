@@ -40,6 +40,7 @@ final class SensorRecorder: NSObject, ObservableObject {
     private var lastAccelerometerLogAt: Date?
     private var lastGyroLogAt: Date?
     private var lastLocationLogAt: Date?
+    private var estimatedLocationIntervalSeconds: TimeInterval?
     private let motionLogIntervalSeconds: TimeInterval = 1.0
     private let locationLogIntervalSeconds: TimeInterval = 0.25
 
@@ -235,18 +236,33 @@ final class SensorRecorder: NSObject, ObservableObject {
         )
     }
 
-    private func logLocationIfNeeded(_ location: CLLocation, speed: Double, course: Double?, at now: Date) {
+    private func logLocationIfNeeded(
+        _ location: CLLocation,
+        speed: Double,
+        course: Double?,
+        speedAccuracy: Double?,
+        courseAccuracy: Double?,
+        jitter: Double?,
+        at now: Date
+    ) {
         guard shouldLog(lastLoggedAt: lastLocationLogAt, now: now, minInterval: locationLogIntervalSeconds) else { return }
         lastLocationLogAt = now
         let courseText = course.map { String(format: "%.1f°", $0) } ?? "n/a"
+        let speedAccText = speedAccuracy.map { String(format: "%.2f", $0) } ?? "n/a"
+        let courseAccText = courseAccuracy.map { String(format: "%.1f", $0) } ?? "n/a"
+        let jitterText = jitter.map { String(format: "%.3f", $0) } ?? "n/a"
         print(
             String(
-                format: "[Sensor][GPS] lat: %.6f lon: %.6f speed: %.2f m/s acc: %.1f m course: %@",
+                format: "[Sensor][GPS] lat: %.6f lon: %.6f speed: %.2f m/s acc: %.1f m speedAcc: %@ course: %@ courseAcc: %@ jitter: %@",
                 location.coordinate.latitude,
                 location.coordinate.longitude,
                 speed,
                 location.horizontalAccuracy,
+                speedAccText,
                 courseText
+                ,
+                courseAccText,
+                jitterText
             )
         )
     }
@@ -285,13 +301,37 @@ extension SensorRecorder: CLLocationManagerDelegate {
 
             let speed = max(0, location.speed)
             let course: Double? = location.course >= 0 ? location.course : nil
-            logLocationIfNeeded(location, speed: speed, course: course, at: Date())
+            let speedAccuracy: Double? = location.speedAccuracy >= 0 ? location.speedAccuracy : nil
+            let courseAccuracy: Double? = location.courseAccuracy >= 0 ? location.courseAccuracy : nil
+            let timestampJitter: Double? = {
+                guard let previous = lastAcceptedLocationTimestamp else { return nil }
+                let delta = location.timestamp.timeIntervalSince(previous)
+                if let estimated = estimatedLocationIntervalSeconds {
+                    estimatedLocationIntervalSeconds = (estimated * 0.85) + (delta * 0.15)
+                    return abs(delta - estimated)
+                } else {
+                    estimatedLocationIntervalSeconds = delta
+                    return nil
+                }
+            }()
+            logLocationIfNeeded(
+                location,
+                speed: speed,
+                course: course,
+                speedAccuracy: speedAccuracy,
+                courseAccuracy: courseAccuracy,
+                jitter: timestampJitter,
+                at: Date()
+            )
             let sample = TelemetrySample(
                 coordinate: GeoCoordinate(location.coordinate),
                 timestamp: location.timestamp,
                 speedMPS: speed,
+                speedAccuracyMPS: speedAccuracy,
                 courseDegrees: course,
+                courseAccuracyDegrees: courseAccuracy,
                 horizontalAccuracyMeters: location.horizontalAccuracy,
+                timestampJitterSeconds: timestampJitter,
                 accelerationX: latestAcceleration?.x,
                 accelerationY: latestAcceleration?.y,
                 accelerationZ: latestAcceleration?.z,

@@ -4,10 +4,13 @@ import os
 from pprint import pprint
 
 BASE = "https://lt-api.speedhive.com"
+OUTPUT_DIR = "outputs_old"
 
-EVENT_ID = "E82E774B72637180-2147484742"
-SESSION_ID = "E82E774B72637180-2147484742-1073749966"
-QUALI_ID = "E82E774B72637180-2147484742-1073749963"
+EVENT_ID = "E82E774B72637180-2147484765"
+SESSION_ID = "E82E774B72637180-2147484765-1073750254"
+QUALI_ID = "E82E774B72637180-2147484765-1073750253"
+PRACTICE_1_ID = "E82E774B72637180-2147484765-1073750251"
+PRACTICE_2_ID = 'E82E774B72637180-2147484765-1073750252'
 
 HEADERS = {
     "Accept": "application/json",
@@ -40,11 +43,6 @@ def fetch_session_stats(event_id: str, session_id: str) -> dict:
 def fetch_competitor(event_id: str, session_id: str, competitor_id: str) -> dict:
     """Fetch competitor data."""
     url = f"{BASE}/api/events/{event_id}/sessions/{session_id}/competitor/{competitor_id}"
-    return fetch_api(url)
-
-def fetch_trackmap(event_id: str) -> dict:
-    """Fetch trackmap data."""
-    url = f"{BASE}/api/events/{event_id}/trackmap"
     return fetch_api(url)
 
 def fetch_session_bundle(event_id: str, session_id: str) -> tuple[dict, dict, list]:
@@ -203,41 +201,18 @@ def save_competitor_laps_to_csv(all_competitors: list, filename: str = "competit
                 })
     print(f"✓ Saved lap data for {len(all_competitors)} competitors to {filename}")
 
-def save_trackmap_to_csv(trackmap: dict, filename: str = "trackmap.csv"):
-    """Save trackmap coordinates to CSV."""
-    points = trackmap.get('p', [])
-    
-    with open(filename, 'w', newline='') as f:
-        fieldnames = ['track_id', 'track_name', 'latitude', 'longitude', 'point_index']
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        
-        for idx, point in enumerate(points):
-            writer.writerow({
-                'track_id': trackmap.get('id'),
-                'track_name': trackmap.get('n'),
-                'latitude': point[0],
-                'longitude': point[1],
-                'point_index': idx,
-            })
-    print(f"✓ Saved {len(points)} trackmap points to {filename}")
-
-def export_session_csvs(prefix: str, session_data: dict, session_stats: dict, all_competitors: list):
-    """Save session CSVs with an optional prefix."""
-    save_session_stats_to_csv(session_stats, filename=f"{prefix}session_stats.csv")
-    save_results_to_csv(session_data, filename=f"{prefix}results.csv")
-    save_competitor_laps_to_csv(all_competitors, filename=f"{prefix}competitor_laps.csv")
+def export_session_csvs_to_dir(folder: str, session_data: dict, session_stats: dict, all_competitors: list):
+    """Save session CSVs inside a target folder."""
+    os.makedirs(folder, exist_ok=True)
+    save_session_stats_to_csv(session_stats, filename=os.path.join(folder, "session_stats.csv"))
+    save_results_to_csv(session_data, filename=os.path.join(folder, "results.csv"))
+    save_competitor_laps_to_csv(all_competitors, filename=os.path.join(folder, "competitor_laps.csv"))
 
 
 def main():
     print("Fetching event data...")
     event = fetch_event(EVENT_ID)
     pprint(event)
-    print("\n" + "="*50 + "\n")
-
-    print("Fetching trackmap...")
-    trackmap = fetch_trackmap(EVENT_ID)
-    pprint(trackmap)
     print("\n" + "="*50 + "\n")
 
     print("Fetching normal session bundle...")
@@ -250,13 +225,45 @@ def main():
     print(f"\nSuccessfully fetched quali session bundle ({len(quali_competitors)} competitors)")
     print("\n" + "="*50 + "\n")
 
-    print("Saving data to CSV files...")
-    save_event_to_csv(event)
-    save_sessions_to_csv(event)
-    save_trackmap_to_csv(trackmap)
+    print("Fetching practice 1 session bundle...")
+    practice_1_data, practice_1_stats, practice_1_competitors = fetch_session_bundle(EVENT_ID, PRACTICE_1_ID)
+    print(f"\nSuccessfully fetched practice 1 session bundle ({len(practice_1_competitors)} competitors)")
+    print("\n" + "="*50 + "\n")
 
-    export_session_csvs(prefix="", session_data=session_data, session_stats=session_stats, all_competitors=all_competitors)
-    export_session_csvs(prefix="quali_", session_data=quali_data, session_stats=quali_stats, all_competitors=quali_competitors)
+    print("Fetching practice 2 session bundle...")
+    practice_2_data, practice_2_stats, practice_2_competitors = fetch_session_bundle(EVENT_ID, PRACTICE_2_ID)
+    print(f"\nSuccessfully fetched practice 2 session bundle ({len(practice_2_competitors)} competitors)")
+    print("\n" + "="*50 + "\n")
+
+    print("Saving data to CSV files...")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    save_event_to_csv(event, filename=os.path.join(OUTPUT_DIR, "events.csv"))
+    save_sessions_to_csv(event, filename=os.path.join(OUTPUT_DIR, "sessions.csv"))
+
+    export_session_csvs_to_dir(
+        folder=os.path.join(OUTPUT_DIR, "race"),
+        session_data=session_data,
+        session_stats=session_stats,
+        all_competitors=all_competitors,
+    )
+    export_session_csvs_to_dir(
+        folder=os.path.join(OUTPUT_DIR, "quali"),
+        session_data=quali_data,
+        session_stats=quali_stats,
+        all_competitors=quali_competitors,
+    )
+    export_session_csvs_to_dir(
+        folder=os.path.join(OUTPUT_DIR, "practice_1"),
+        session_data=practice_1_data,
+        session_stats=practice_1_stats,
+        all_competitors=practice_1_competitors,
+    )
+    export_session_csvs_to_dir(
+        folder=os.path.join(OUTPUT_DIR, "practice_2"),
+        session_data=practice_2_data,
+        session_stats=practice_2_stats,
+        all_competitors=practice_2_competitors,
+    )
 
     print("✓ All data exported successfully!")
 
