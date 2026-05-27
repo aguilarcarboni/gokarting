@@ -86,7 +86,7 @@ struct DashboardView: View {
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
 
                 Text("Track your speed. Beat your best.")
-                    .font(.title3)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }

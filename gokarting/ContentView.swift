@@ -6,6 +6,7 @@ enum AppTab: Hashable {
     case timeTrials
     case races
     case tracks
+    case analysis
     case progression
 }
 
@@ -37,12 +38,19 @@ struct ContentView: View {
                 .tabItem {
                     Label("Tracks", systemImage: "map")
                 }
-
+            
             ProgressionView()
                 .tag(AppTab.progression)
                 .tabItem {
                     Label("Progression", systemImage: "chart.line.uptrend.xyaxis")
                 }
+
+            AnalysisView()
+                .tag(AppTab.analysis)
+                .tabItem {
+                    Label("Analysis", systemImage: "waveform.path.ecg")
+                }
+
         }
     }
 }

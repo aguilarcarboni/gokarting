@@ -115,6 +115,7 @@ final class LiveTimingViewModel: ObservableObject {
         sensorRecorder.stop()
         isRecording = false
         sessionEndedAt = Date()
+        autoSaveSessionJSON()
         phase = .summary
     }
 
@@ -174,6 +175,23 @@ final class LiveTimingViewModel: ObservableObject {
             exportStatus = "Session JSON copied to clipboard."
         } catch {
             exportStatus = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func autoSaveSessionJSON() {
+        guard !sessionSamples.isEmpty || !laps.isEmpty || !gateCrossings.isEmpty else {
+            exportStatus = "Session stopped. No data available to save."
+            return
+        }
+
+        do {
+            let json = try encodedSessionExportJSON()
+            let url = try saveSessionJSONToDisk(json)
+            exportStatus = "Session JSON saved to \(url.lastPathComponent)."
+            print("[LiveTimingDebug] Auto-saved session JSON -> \(url.path)")
+        } catch {
+            exportStatus = "Auto-save failed: \(error.localizedDescription)"
+            print("[LiveTimingDebug] Auto-save failed: \(error)")
         }
     }
 
@@ -335,6 +353,57 @@ final class LiveTimingViewModel: ObservableObject {
 #if canImport(UIKit)
         UIPasteboard.general.string = text
 #endif
+    }
+
+    private func saveSessionJSONToDisk(_ json: String) throws -> URL {
+        let baseDirectory = try liveSessionExportDirectory()
+        let fileName = "\(sessionExportBaseFileName()).json"
+        let destinationURL = uniqueFileURL(in: baseDirectory, fileName: fileName)
+        try json.write(to: destinationURL, atomically: true, encoding: .utf8)
+        return destinationURL
+    }
+
+    private func liveSessionExportDirectory() throws -> URL {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        let fallbackDirectory = FileManager.default.temporaryDirectory
+        let baseDirectory = (documentsDirectory ?? fallbackDirectory).appendingPathComponent("LiveTimingSessions", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: baseDirectory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        return baseDirectory
+    }
+
+    private func sessionExportBaseFileName() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let endedAt = sessionEndedAt ?? Date()
+        let timestamp = formatter.string(from: endedAt)
+        let identifier = normalizedIdentifier
+        return "\(sanitizedFileComponent(identifier))-\(timestamp)"
+    }
+
+    private func sanitizedFileComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let sanitized = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return sanitized.isEmpty ? "session" : sanitized
+    }
+
+    private func uniqueFileURL(in directory: URL, fileName: String) -> URL {
+        let baseName = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
+        var candidate = directory.appendingPathComponent(fileName)
+        var suffix = 1
+
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let numberedName = "\(baseName)-\(suffix).\(ext)"
+            candidate = directory.appendingPathComponent(numberedName)
+            suffix += 1
+        }
+
+        return candidate
     }
 
     private func accumulatedDistanceMeters(for samples: [TelemetrySample]) -> Double {
@@ -798,8 +867,6 @@ extension LiveTimingViewModel {
     }
 
     func buildHeatFromCurrentSession() -> Heat? {
-        guard !laps.isEmpty else { return nil }
-
         let endedAt = sessionEndedAt ?? sessionSamples.last?.timestamp ?? Date()
         let startedAt = sessionStartedAt ?? sessionSamples.first?.timestamp ?? endedAt
         let durationSeconds = max(0, endedAt.timeIntervalSince(startedAt))

@@ -31,8 +31,17 @@ struct LapView: View {
     }
 
     private var sanitizedLapRoute: [GeoCoordinate] {
-        let sourceRoute = motionDerivedRoute.isEmpty ? lap.route : motionDerivedRoute
-        let validPoints = sourceRoute.filter { point in
+        let sanitizedMotionRoute = sanitizeRoute(motionDerivedRoute)
+        let sanitizedRecordedRoute = sanitizeRoute(lap.route)
+
+        if sanitizedMotionRoute.count >= 2 {
+            return sanitizedMotionRoute
+        }
+        return sanitizedRecordedRoute
+    }
+
+    private func sanitizeRoute(_ route: [GeoCoordinate]) -> [GeoCoordinate] {
+        let validPoints = route.filter { point in
             (-90.0 ... 90.0).contains(point.latitude)
             && (-180.0 ... 180.0).contains(point.longitude)
             && !(abs(point.latitude) < 0.000001 && abs(point.longitude) < 0.000001)
@@ -135,20 +144,27 @@ struct LapView: View {
                         statRow(title: "Delta to Best", value: formatDelta(deltaToBest))
                         statRow(title: "Delta to Avg", value: formatDelta(deltaToAverage))
                         statRow(title: "Timestamp", value: lap.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    }
-                }
-
-                card(title: "Session Context") {
-                    VStack(spacing: 8) {
-                        statRow(title: "Heat", value: heat.identifier)
-                        statRow(title: "Type", value: heat.type.label)
-                        statRow(title: "Competitor", value: lapCompetitor.displayName)
-                        statRow(title: "Track", value: lap.track.rawValue)
-                        statRow(title: "Kart", value: lap.kart.rawValue)
-                        statRow(title: "Total Laps", value: "\(heat.laps(for: lapCompetitor).count)")
-                        statRow(title: "Layout Points", value: "\(trackLayoutPolyline.count)")
-                        if let width = lap.track.layout?.trackWidthMeters {
-                            statRow(title: "Track Width", value: String(format: "%.1f m", width))
+                        if let crossedAt = lap.crossedAt {
+                            statRow(title: "Crossed At", value: crossedAt.formatted(date: .abbreviated, time: .shortened))
+                        }
+                        if let speedAtCrossingMPS = lap.speedAtCrossingMPS {
+                            statRow(title: "Crossing Speed", value: String(format: "%.2f m/s", speedAtCrossingMPS))
+                        }
+                        if let confidence = lap.confidenceScore {
+                            statRow(title: "Crossing Confidence", value: String(format: "%.0f%%", confidence * 100))
+                        }
+                        statRow(title: "Recovered Lap", value: (lap.isRecovered ?? false) ? "Yes" : "No")
+                        if let suspectReason = lap.suspectReason, !suspectReason.isEmpty {
+                            statRow(title: "Lap Flag", value: suspectReason)
+                        }
+                        if let telemetry = lap.telemetry {
+                            statRow(title: "Longitudinal Accel", value: String(format: "%.2f g", telemetry.maxLongitudinalAccel))
+                            statRow(title: "Lateral Accel", value: String(format: "%.2f g", telemetry.maxLateralAccel))
+                            statRow(title: "Yaw Rate", value: String(format: "%.2f rad/s", telemetry.maxYawRate))
+                            statRow(title: "Avg Speed", value: String(format: "%.2f m/s", telemetry.averageSpeedMPS))
+                            statRow(title: "Peak Speed", value: String(format: "%.2f m/s", telemetry.peakSpeedMPS))
+                            statRow(title: "Distance", value: String(format: "%.1f m", telemetry.distanceMeters))
+                            statRow(title: "GPS Samples", value: "\(telemetry.sampleCount)")
                         }
                     }
                 }
@@ -335,35 +351,6 @@ struct LapView: View {
                                     }
                                 }
                                 .frame(height: 130)
-                            }
-                        }
-                    }
-                }
-
-                if lap.telemetry != nil || lap.speedAtCrossingMPS != nil || lap.crossedAt != nil {
-                    card(title: "Motion Telemetry") {
-                        VStack(spacing: 8) {
-                            if let crossedAt = lap.crossedAt {
-                                statRow(title: "Crossed At", value: crossedAt.formatted(date: .abbreviated, time: .shortened))
-                            }
-                            if let speedAtCrossingMPS = lap.speedAtCrossingMPS {
-                                statRow(title: "Crossing Speed", value: String(format: "%.2f m/s", speedAtCrossingMPS))
-                            }
-                            if let confidence = lap.confidenceScore {
-                                statRow(title: "Crossing Confidence", value: String(format: "%.0f%%", confidence * 100))
-                            }
-                            statRow(title: "Recovered Lap", value: (lap.isRecovered ?? false) ? "Yes" : "No")
-                            if let suspectReason = lap.suspectReason, !suspectReason.isEmpty {
-                                statRow(title: "Lap Flag", value: suspectReason)
-                            }
-                            if let telemetry = lap.telemetry {
-                                statRow(title: "Longitudinal Accel", value: String(format: "%.2f g", telemetry.maxLongitudinalAccel))
-                                statRow(title: "Lateral Accel", value: String(format: "%.2f g", telemetry.maxLateralAccel))
-                                statRow(title: "Yaw Rate", value: String(format: "%.2f rad/s", telemetry.maxYawRate))
-                                statRow(title: "Avg Speed", value: String(format: "%.2f m/s", telemetry.averageSpeedMPS))
-                                statRow(title: "Peak Speed", value: String(format: "%.2f m/s", telemetry.peakSpeedMPS))
-                                statRow(title: "Distance", value: String(format: "%.1f m", telemetry.distanceMeters))
-                                statRow(title: "GPS Samples", value: "\(telemetry.sampleCount)")
                             }
                         }
                     }
@@ -626,6 +613,7 @@ struct LapView: View {
             span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
         )
     }
+
 }
 
 #Preview {

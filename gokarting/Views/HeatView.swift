@@ -57,39 +57,17 @@ struct HeatView: View {
                         statRow(title: "Competitor", value: activeCompetitor?.displayName ?? "--")
                         statRow(title: "Track", value: heat.track.rawValue)
                         statRow(title: "Kart", value: heat.kart.rawValue)
-                        statRow(title: "Layout Points", value: "\(heat.track.layout?.centerline.count ?? 0)")
-                        if let width = heat.track.layout?.trackWidthMeters {
-                            statRow(title: "Track Width", value: String(format: "%.1f m", width))
-                        }
                         statRow(title: "Best Lap", value: format(heat.bestLap(for: activeCompetitor)))
                         statRow(title: "Avg Lap", value: format(heat.averageLap(for: activeCompetitor)))
                         statRow(title: "Median Lap", value: format(heat.medianLap(for: activeCompetitor)))
                         statRow(title: "Consistency (StdDev)", value: format(heat.consistency(for: activeCompetitor)))
                         statRow(title: "Opening Pace (First 5)", value: format(heat.firstLapsAverage(for: activeCompetitor, count: 5)))
                         statRow(title: "Closing Pace (Last 5)", value: format(heat.lastLapsAverage(for: activeCompetitor, count: 5)))
-                    }
-                }
-
-                if let metadata = heat.sessionMetadata {
-                    card(title: "Session Motion Telemetry") {
-                        VStack(spacing: 8) {
-                            statRow(title: "Source", value: metadata.source)
-                            statRow(title: "Direction", value: metadata.raceDirection.rawValue)
-                            if let orientation = metadata.phoneMountOrientation {
-                                statRow(title: "Mount", value: orientation.rawValue)
-                            }
-                            statRow(title: "Duration", value: format(metadata.durationSeconds))
-                            statRow(title: "Motion Samples", value: "\(metadata.sampleCount)")
-                            if let rate = metadata.estimatedMotionSampleRateHZ {
-                                statRow(title: "Motion Rate", value: String(format: "%.1f Hz", rate))
-                            }
-                            statRow(title: "Gate Crossings", value: "\(metadata.gateCrossingsCount)")
+                        if let metadata = heat.sessionMetadata {
                             statRow(title: "Distance", value: String(format: "%.1f m", metadata.totalDistanceMeters))
                             statRow(title: "Average Speed", value: String(format: "%.2f m/s", metadata.averageSpeedMPS))
                             statRow(title: "Peak Speed", value: String(format: "%.2f m/s", metadata.peakSpeedMPS))
-                            statRow(title: "Peak Accel", value: String(format: "%.2f g", metadata.peakAccelerationG))
                             statRow(title: "Peak Decel", value: String(format: "%.2f g", metadata.peakDecelerationG))
-                            statRow(title: "Peak Yaw", value: String(format: "%.2f rad/s", metadata.peakYawRate))
                         }
                     }
                 }

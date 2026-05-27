@@ -9,7 +9,6 @@ struct LiveTimingView: View {
     @State private var setupCameraPosition: MapCameraPosition = .automatic
     @State private var summaryCameraPosition: MapCameraPosition = .automatic
     @State private var selectedLapNumber: Int?
-    @State private var showLiveLaps = false
     @State private var debugPreviewHeat: Heat?
     @State private var showDebugImportPicker = false
     private let preferredTrack: Track = .p1ShortConfig
@@ -71,17 +70,16 @@ struct LiveTimingView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 14) {
+            VStack(spacing: viewModel.phase == .live ? 0 : 20) {
                 phaseContent
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+            .padding(.horizontal, viewModel.phase == .live ? 0 : 20)
+            .padding(.top, viewModel.phase == .live ? 0 : 12)
+            .padding(.bottom, viewModel.phase == .live ? 0 : 24)
             .appScreenBackground()
-            .navigationTitle("Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(viewModel.phase == .live ? .hidden : .visible, for: .tabBar)
-            .toolbar(viewModel.phase == .live ? .hidden : .visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 viewModel.requestPermissions()
                 setupCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
@@ -99,9 +97,6 @@ struct LiveTimingView: View {
             .onChange(of: viewModel.phase) { _, newPhase in
                 if newPhase == .live || newPhase == .summary {
                     summaryCameraPosition = .region(mapRegion(for: viewModel.selectedTrack, gate: viewModel.currentGate))
-                }
-                if newPhase != .live {
-                    showLiveLaps = false
                 }
                 syncPhoneMountOrientationFromDevice()
                 updateOrientation(for: newPhase)
@@ -155,13 +150,11 @@ struct LiveTimingView: View {
     }
 
     private var phaseContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 14) {
-                if viewModel.phase == .setup {
-                    setupPanel
-                }
-
-                if viewModel.phase == .live {
+        Group {
+            if viewModel.phase == .summary, let completedHeat = viewModel.preparedHeatForSaving {
+                HeatView(heat: completedHeat)
+            } else if viewModel.phase == .live {
+                VStack(spacing: 10) {
                     HStack {
                         Spacer()
                         Button(role: .destructive, action: viewModel.finishSession) {
@@ -172,64 +165,119 @@ struct LiveTimingView: View {
                         .buttonStyle(.plain)
                         .glassCircleBackground()
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+
                     livePanel
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Session")
+                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text("Configure, run, and review your live timing session.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                if viewModel.phase == .summary {
-                    summaryPanel
+                        if viewModel.phase == .setup {
+                            setupPanel
+                        }
+
+                        if viewModel.phase == .summary {
+                            summaryPanel
+                        }
+                    }
+                    .padding(.bottom, 10)
                 }
             }
-            .padding(.bottom, 10)
         }
     }
 
     private var setupPanel: some View {
-        VStack(spacing: 14) {
-            card {
-                VStack(spacing: 12) {
-                    Text("Session Configuration")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    Picker("Session Type", selection: $viewModel.sessionType) {
-                        ForEach(HeatType.allCases, id: \.self) { type in
-                            Text(type.label).tag(type)
+        VStack(spacing: 20) {
+            VStack(spacing: 14) {
+                HStack(spacing: 10) {
+                    ForEach(HeatType.allCases, id: \.self) { type in
+                        Button {
+                            viewModel.sessionType = type
+                        } label: {
+                            Text(type.label)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .foregroundStyle(viewModel.sessionType == type ? Color.white : Color.primary)
                         }
+                        .buttonStyle(.plain)
+                        .glassCapsuleBackground(accented: viewModel.sessionType == type)
                     }
-                    .pickerStyle(.segmented)
+                }
 
+                Menu {
                     Picker("Track", selection: $viewModel.selectedTrack) {
                         ForEach(orderedTracks, id: \.self) { track in
                             Text(track.rawValue).tag(track)
                         }
                     }
-                    .pickerStyle(.menu)
+                } label: {
+                    Label(viewModel.selectedTrack.rawValue, systemImage: "map")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCapsuleBackground(accented: false)
+                }
 
+                Menu {
                     Picker("Kart", selection: $viewModel.selectedKart) {
                         ForEach(viewModel.selectedTrack.availableKarts, id: \.self) { kart in
                             Text(kart.rawValue).tag(kart)
                         }
                     }
-                    .pickerStyle(.menu)
+                } label: {
+                    Label(viewModel.selectedKart.rawValue, systemImage: "steeringwheel")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCapsuleBackground(accented: false)
+                }
 
+                Menu {
                     Picker("Phone Mount", selection: $viewModel.phoneMountOrientation) {
                         ForEach(PhoneMountOrientation.allCases, id: \.self) { orientation in
                             Text(orientation.rawValue).tag(orientation)
                         }
                     }
-                    .pickerStyle(.menu)
+                } label: {
+                    Label(viewModel.phoneMountOrientation.rawValue, systemImage: "iphone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCapsuleBackground(accented: false)
                 }
             }
 
             card {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Start / Finish Gate")
-                        .font(.headline)
+                        .font(.title3.weight(.semibold))
 
                     Map(position: $setupCameraPosition, interactionModes: [.zoom, .pan]) {
                         if !trackLayoutPolyline.isEmpty {
                             MapPolyline(coordinates: trackLayoutPolyline)
-                                .stroke(.cyan, lineWidth: 4)
+                                .stroke(.blue, lineWidth: 4)
                         }
                         MapPolyline(coordinates: gatePolyline)
                             .stroke(.red, lineWidth: 5)
@@ -248,7 +296,7 @@ struct LiveTimingView: View {
                         MapUserLocationButton()
                     }
                     .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
             }
 
@@ -265,131 +313,81 @@ struct LiveTimingView: View {
     }
 
     private var livePanel: some View {
-        VStack(spacing: 14) {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    ForEach(0..<12, id: \.self) { index in
-                        Circle()
-                            .fill(liveDashLightColor(at: index))
-                            .frame(width: 11, height: 11)
-                    }
-                }
-                .padding(.top, 4)
-
-                HStack(spacing: 10) {
-                    liveDashPill(title: "Type", value: viewModel.sessionType.label)
-                    liveDashPill(title: "Track", value: viewModel.selectedTrack.rawValue)
-                    liveDashPill(title: "Laps", value: "\(viewModel.laps.count)")
+        VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(spacing: 8) {
+                    liveDashSideMetric(
+                        title: "DELTA",
+                        value: formattedDelta(viewModel.currentLapDeltaToBest),
+                        accent: (viewModel.currentLapDeltaToBest ?? 0) <= 0 ? .green : .red
+                    )
+                    liveDashSideMetric(
+                        title: "BEST",
+                        value: formattedTime(viewModel.bestLap?.durationSeconds),
+                        accent: .mint
+                    )
                 }
 
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(spacing: 8) {
-                        liveDashSideMetric(
-                            title: "DELTA",
-                            value: formattedDelta(viewModel.currentLapDeltaToBest),
-                            accent: (viewModel.currentLapDeltaToBest ?? 0) <= 0 ? .green : .red
-                        )
-                        liveDashSideMetric(
-                            title: "BEST",
-                            value: formattedTime(viewModel.bestLap?.durationSeconds),
-                            accent: .mint
-                        )
-                    }
+                VStack(spacing: 6) {
+                    Text("\(currentLiveLapNumber)")
+                        .font(.system(size: 96, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
 
-                    VStack(spacing: 6) {
-                        Text("\(currentLiveLapNumber)")
-                            .font(.system(size: 72, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                    Text("CURRENT LAP")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
 
-                        Text("CURRENT LAP")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        Text(formattedTime(viewModel.currentLapElapsed))
-                            .font(.title2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.white)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    VStack(spacing: 8) {
-                        liveDashSideMetric(
-                            title: "SPEED",
-                            value: formattedSpeed(viewModel.latestSample?.speedMPS ?? 0),
-                            accent: .yellow
-                        )
-                        liveDashSideMetric(
-                            title: "SESSION",
-                            value: formattedTime(viewModel.sessionElapsed),
-                            accent: .orange
-                        )
-                    }
+                    Text(formattedTime(viewModel.currentLapElapsed))
+                        .font(.system(size: 56, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
                 }
+                .frame(maxWidth: .infinity)
 
-                HStack(spacing: 10) {
-                    liveDashPill(title: "AVG", value: formattedSpeed(viewModel.averageSpeedMPS))
-                    liveDashPill(title: "PEAK", value: formattedSpeed(viewModel.peakSpeedMPS))
-                    liveDashPill(title: "YAW", value: String(format: "%.2f", viewModel.peakYawRate))
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.82), Color.black.opacity(0.56)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-
-            if showLiveLaps {
-                card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("All Laps")
-                            .font(.headline)
-
-                        if viewModel.laps.isEmpty {
-                            Text("No completed laps yet.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(viewModel.laps.reversed()) { lap in
-                                HStack {
-                                    Text("Lap \(lap.number)")
-                                        .fontWeight(.semibold)
-                                    Spacer()
-                                    Text(formattedTime(lap.durationSeconds))
-                                        .monospacedDigit()
-                                    Text(String(format: "%.2f m/s", lap.speedAtCrossingMPS))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 2)
-                            }
-                        }
-                    }
+                VStack(spacing: 8) {
+                    liveDashSideMetric(
+                        title: "SPEED",
+                        value: formattedSpeed(viewModel.latestSample?.speedMPS ?? 0),
+                        accent: .yellow
+                    )
+                    liveDashSideMetric(
+                        title: "SESSION",
+                        value: formattedTime(viewModel.sessionElapsed),
+                        accent: .orange
+                    )
                 }
             }
 
-            metricButtonCard(
-                title: "Laps",
-                value: "\(viewModel.laps.count) completed",
-                accent: .blue,
-                isActive: showLiveLaps
-            ) {
-                showLiveLaps.toggle()
+            Spacer(minLength: 0)
+
+            HStack(spacing: 10) {
+                liveDashPill(title: "AVG", value: formattedSpeed(viewModel.averageSpeedMPS))
+                liveDashPill(title: "PEAK", value: formattedSpeed(viewModel.peakSpeedMPS))
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [Color.black.opacity(0.82), Color.black.opacity(0.56)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(
+            Rectangle()
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
     }
 
     private var summaryPanel: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 20) {
             HStack(spacing: 10) {
                 metricCard(title: "Fastest", value: formattedTime(viewModel.bestLap?.durationSeconds), accent: .mint)
                 metricCard(title: "Average", value: formattedTime(averageLapDuration), accent: .blue)
@@ -397,9 +395,9 @@ struct LiveTimingView: View {
             }
 
             card {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Track Map")
-                        .font(.headline)
+                        .font(.title3.weight(.semibold))
 
                     Map(position: $summaryCameraPosition, interactionModes: [.zoom, .pan]) {
                         if !trackLayoutPolyline.isEmpty {
@@ -409,7 +407,7 @@ struct LiveTimingView: View {
 
                         if !routePolyline.isEmpty {
                             MapPolyline(coordinates: routePolyline)
-                                .stroke(.cyan, lineWidth: 4)
+                                .stroke(.blue, lineWidth: 4)
                         }
 
                         MapPolyline(coordinates: gatePolyline)
@@ -417,7 +415,7 @@ struct LiveTimingView: View {
                     }
                     .mapStyle(.imagery(elevation: .realistic))
                     .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
 
                     if trackLayoutPolyline.isEmpty {
                         Text("This track currently uses gate-only mode (no saved layout yet).")
@@ -428,9 +426,9 @@ struct LiveTimingView: View {
             }
 
             card {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Session Laps")
-                        .font(.headline)
+                        .font(.title3.weight(.semibold))
 
                     if viewModel.laps.isEmpty {
                         Text("No completed laps in this session.")
@@ -460,11 +458,15 @@ struct LiveTimingView: View {
                                         .font(.caption.monospacedDigit())
                                         .foregroundStyle(.secondary)
                                 }
-                                .padding(10)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
                                 .frame(maxWidth: .infinity)
-                                .glassRoundedBackground(radius: 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white.opacity(0.05))
+                                )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
+                                    RoundedRectangle(cornerRadius: 16)
                                         .stroke(
                                             selectedLapNumber == lap.number ? Color.red.opacity(0.65) : .clear,
                                             lineWidth: 1.4
@@ -479,45 +481,45 @@ struct LiveTimingView: View {
 
             if let selectedLap {
                 card {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Lap \(selectedLap.number) Telemetry")
-                            .font(.headline)
-                        Text("Longitudinal accel: \(String(format: "%.2f g", selectedLap.telemetry.maxLongitudinalAccel))")
-                        Text("Lateral accel: \(String(format: "%.2f g", selectedLap.telemetry.maxLateralAccel))")
-                        Text("Max yaw rate: \(String(format: "%.2f rad/s", selectedLap.telemetry.maxYawRate))")
-                        Text("Avg speed: \(String(format: "%.2f m/s", selectedLap.telemetry.averageSpeedMPS))")
-                        Text("Peak speed: \(String(format: "%.2f m/s", selectedLap.telemetry.peakSpeedMPS))")
-                        Text("Distance: \(String(format: "%.1f m", selectedLap.telemetry.distanceMeters))")
-                        Text("Samples: \(selectedLap.telemetry.sampleCount)")
+                            .font(.title3.weight(.semibold))
+                        summaryStatRow("Longitudinal accel", String(format: "%.2f g", selectedLap.telemetry.maxLongitudinalAccel))
+                        summaryStatRow("Lateral accel", String(format: "%.2f g", selectedLap.telemetry.maxLateralAccel))
+                        summaryStatRow("Max yaw rate", String(format: "%.2f rad/s", selectedLap.telemetry.maxYawRate))
+                        summaryStatRow("Avg speed", String(format: "%.2f m/s", selectedLap.telemetry.averageSpeedMPS))
+                        summaryStatRow("Peak speed", String(format: "%.2f m/s", selectedLap.telemetry.peakSpeedMPS))
+                        summaryStatRow("Distance", String(format: "%.1f m", selectedLap.telemetry.distanceMeters))
+                        summaryStatRow("Samples", "\(selectedLap.telemetry.sampleCount)")
                     }
                 }
             }
 
             card {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Session Telemetry")
-                        .font(.headline)
-                    Text("Samples: \(viewModel.sampleCount)")
-                    Text("Average speed: \(formattedSpeed(viewModel.averageSpeedMPS))")
-                    Text("Peak acceleration: \(String(format: "%.2f g", viewModel.peakAccelerationG))")
-                    Text("Peak deceleration: \(String(format: "%.2f g", viewModel.peakDecelerationG))")
-                    Text("Peak yaw: \(String(format: "%.2f rad/s", viewModel.peakYawRate))")
-                    Text("Distance: \(String(format: "%.1f m", viewModel.totalDistanceMeters))")
+                        .font(.title3.weight(.semibold))
+                    summaryStatRow("Samples", "\(viewModel.sampleCount)")
+                    summaryStatRow("Average speed", formattedSpeed(viewModel.averageSpeedMPS))
+                    summaryStatRow("Peak acceleration", String(format: "%.2f g", viewModel.peakAccelerationG))
+                    summaryStatRow("Peak deceleration", String(format: "%.2f g", viewModel.peakDecelerationG))
+                    summaryStatRow("Peak yaw", String(format: "%.2f rad/s", viewModel.peakYawRate))
+                    summaryStatRow("Distance", String(format: "%.1f m", viewModel.totalDistanceMeters))
                 }
             }
 
             if let preview = viewModel.preparedHeatForSaving {
                 card {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Savable Session Preview")
-                            .font(.headline)
-                        Text("Type: \(preview.type.label)")
-                        Text("Identifier: \(preview.identifier)")
-                        Text("Track/Kart: \(preview.track.rawValue) • \(preview.kart.rawValue)")
-                        Text("Laps prepared: \(preview.lapCount)")
+                            .font(.title3.weight(.semibold))
+                        summaryStatRow("Type", preview.type.label)
+                        summaryStatRow("Identifier", preview.identifier)
+                        summaryStatRow("Track/Kart", "\(preview.track.rawValue) • \(preview.kart.rawValue)")
+                        summaryStatRow("Laps prepared", "\(preview.lapCount)")
                         if let metadata = preview.sessionMetadata {
-                            Text("Gate crossings: \(metadata.gateCrossingsCount)")
-                            Text("Duration: \(formattedTime(metadata.durationSeconds))")
+                            summaryStatRow("Gate crossings", "\(metadata.gateCrossingsCount)")
+                            summaryStatRow("Duration", formattedTime(metadata.durationSeconds))
                         }
                     }
                 }
@@ -584,58 +586,21 @@ struct LiveTimingView: View {
                 }
 
                 Text(value)
-                    .font(.headline.monospacedDigit())
+                    .font(.title3.weight(.semibold).monospacedDigit())
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private func metricButtonCard(
-        title: String,
-        value: String,
-        accent: Color,
-        isActive: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 8, height: 8)
-                }
-
-                Text(value)
-                    .font(.headline.monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .glassCard(radius: 16)
-            .overlay {
-                if isActive {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.red.opacity(0.6), lineWidth: 1.5)
-                }
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     private func liveDashPill(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.caption.weight(.semibold))
+                .font(.title2.weight(.semibold).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .foregroundStyle(.white)
@@ -649,10 +614,10 @@ struct LiveTimingView: View {
     private func liveDashSideMetric(title: String, value: String, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.headline.monospacedDigit())
+                .font(.title2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -662,26 +627,30 @@ struct LiveTimingView: View {
         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private func liveDashLightColor(at index: Int) -> Color {
-        let speed = viewModel.latestSample?.speedMPS ?? 0
-        let ratio = min(max(speed / 22.0, 0), 1)
-        let litCount = Int(round(ratio * 12))
-        guard index < litCount else { return Color.white.opacity(0.3) }
-
-        if index < 5 {
-            return .green
-        } else if index < 9 {
-            return .yellow
-        } else {
-            return .red
-        }
-    }
-
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
-            .padding(14)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(radius: 16)
+            .glassCard(radius: 30)
+    }
+
+    private func summaryStatRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .font(.subheadline)
+            Spacer(minLength: 16)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(.white)
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+        )
     }
 
     private var debugImportCard: some View {

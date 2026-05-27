@@ -144,7 +144,16 @@ struct ProgressionView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Progression")
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("Track your pace trend over time.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
                     sourceChips
                     sortChips
                     filterCard
@@ -166,12 +175,11 @@ struct ProgressionView: View {
                         summaryCard
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
                 .padding(.bottom, 24)
             }
             .appScreenBackground()
-            .navigationTitle("Progression")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { EmptyView() }
         }
@@ -210,9 +218,9 @@ struct ProgressionView: View {
         Button(action: action) {
             Label(title, systemImage: icon)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.9))
                 .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
@@ -220,29 +228,60 @@ struct ProgressionView: View {
     }
 
     private var filterCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Filters")
-                .font(.headline)
-
+        HStack(spacing: 10) {
             if selectedSource == .timeTrials {
-                Picker("Track & Kart", selection: $selectedCombo) {
-                    ForEach(availableTimeTrialCombos) { combo in
-                        Text(combo.displayName).tag(combo)
+                Menu {
+                    Picker("Track & Kart", selection: $selectedCombo) {
+                        ForEach(availableTimeTrialCombos) { combo in
+                            Text(combo.displayName).tag(combo)
+                        }
                     }
+                } label: {
+                    Label(selectedCombo.displayName, systemImage: "stopwatch")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCapsuleBackground(accented: false)
                 }
-                .pickerStyle(.menu)
             } else {
-                Picker("Track", selection: $selectedRaceTrack) {
-                    Text("All Tracks").tag(Optional<Track>.none)
-                    ForEach(availableRaceTracks, id: \.self) { track in
-                        Text(track.rawValue).tag(Optional(track))
+                Menu {
+                    Picker("Track", selection: $selectedRaceTrack) {
+                        Text("All Tracks").tag(Optional<Track>.none)
+                        ForEach(availableRaceTracks, id: \.self) { track in
+                            Text(track.rawValue).tag(Optional(track))
+                        }
+                    }
+                } label: {
+                    Label(selectedRaceTrack?.rawValue ?? "All Tracks", systemImage: "flag")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCapsuleBackground(accented: false)
+                }
+            }
+
+            Menu {
+                Picker("Sort", selection: $selectedSort) {
+                    ForEach(ProgressionSort.allCases) { sort in
+                        Text(sort.label).tag(sort)
                     }
                 }
-                .pickerStyle(.menu)
+            } label: {
+                Label(selectedSort.label, systemImage: "calendar")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .glassCapsuleBackground(accented: false)
             }
         }
-        .padding(14)
-        .glassCard(radius: 16)
     }
 
     private func chartCard<Content: View>(
@@ -252,12 +291,12 @@ struct ProgressionView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(title, systemImage: icon)
-                .font(.headline)
+                .font(.title3.weight(.semibold))
 
             content()
         }
-        .padding(14)
-        .glassCard(radius: 16)
+        .padding(20)
+        .glassCard(radius: 30)
     }
 
     private var emptyStateCard: some View {
@@ -276,13 +315,13 @@ struct ProgressionView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .glassCard(radius: 16)
+        .glassCard(radius: 30)
     }
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Summary")
-                .font(.headline)
+                .font(.title3.weight(.semibold))
 
             metricRow(title: primaryCountLabel, value: "\(chartData.count)", color: .white)
             metricRow(title: "Data Points", value: "\(chartData.reduce(0) { $0 + $1.sessionCount })", color: .white)
@@ -294,19 +333,26 @@ struct ProgressionView: View {
                 metricRow(title: "Best Lap Change", value: formatDelta(bestDelta), color: bestDelta <= 0 ? .green : .red)
             }
         }
-        .padding(14)
-        .glassCard(radius: 16)
+        .padding(20)
+        .glassCard(radius: 30)
     }
 
     private func metricRow(title: String, value: String, color: Color) -> some View {
         HStack {
             Text(title)
                 .foregroundStyle(.secondary)
+                .font(.subheadline)
             Spacer()
             Text(value)
-                .font(.headline.monospacedDigit())
+                .font(.subheadline.weight(.semibold).monospacedDigit())
                 .foregroundStyle(color)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+        )
     }
 
     private var averageLapChart: some View {
