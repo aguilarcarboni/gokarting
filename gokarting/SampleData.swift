@@ -492,6 +492,20 @@ enum SampleData {
             kart: .sodiRental,
             lapDurations: [79.923, 93.808, 79.705, 79.873],
             date: calendar.date(from: DateComponents(year: 2026, month: 4, day: 9, hour: 17, minute: 21)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "p1speedwaylong-2026-05-21-heat-1",
+            track: .p1SpeedwayLong,
+            kart: .fkKart,
+            lapDurations: [79.520, 80.157, 79.026, 78.434],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 21, hour: 16, minute: 52, second: 34)) ?? Date.distantPast
+        ),
+        Heat(
+            identifier: "p1short-2026-05-21-heat-2",
+            track: .p1ShortConfig,
+            kart: .fkKart,
+            lapDurations: [48.592, 47.621, 47.726, 46.899, 47.080, 46.820, 47.149],
+            date: calendar.date(from: DateComponents(year: 2026, month: 5, day: 21, hour: 17, minute: 18, second: 3)) ?? Date.distantPast
         )
     ]
 
